@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -48,36 +49,58 @@ type LoginResult struct {
 	Roles        []string    `json:"roles"`
 }
 
+// logLogin 记录登录类审计：统一补 Module=system 与 UserAgent。
+// 失败场景必须留痕——「谁在什么时候尝试登录失败了」是安全排查的起点。
+func (s *AuthService) logLogin(username, clientIP, userAgent, detail string, userID int64, ok bool) {
+	e := AuditEntry{
+		LogType: "login", Module: "system",
+		UserID: userID, Username: username,
+		ClientIP: clientIP, UserAgent: userAgent, Detail: detail,
+		Target: username, // 登录日志的「目标」就是被尝试登录的账号，便于按账号筛日志
+	}
+	if !ok {
+		e.Success = BoolPtr(false)
+	}
+	s.audit.LogAsync(e)
+}
+
 // Login 登录：密码校验、失败锁定、签发双令牌
-func (s *AuthService) Login(username, password, clientIP string) (*LoginResult, error) {
+func (s *AuthService) Login(username, password, clientIP, userAgent string) (*LoginResult, error) {
 	var user model.User
 	err := s.db.Where("username = ?", username).First(&user).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		s.audit.LogAsync(AuditEntry{LogType: "login", Username: username, ClientIP: clientIP, Detail: "用户不存在", Success: false})
+		s.logLogin(username, clientIP, userAgent, "用户不存在", 0, false)
 		return nil, ErrBadCredential
 	}
 	if err != nil {
 		return nil, err
 	}
 	if user.Status != 1 {
+		s.logLogin(username, clientIP, userAgent, "账号已停用，禁止登录", user.ID, false)
 		return nil, ErrAccountBanned
 	}
 	// 锁定检查
 	if user.LockedUntil != nil && user.LockedUntil.After(time.Now()) {
+		s.logLogin(username, clientIP, userAgent, "账号处于锁定期，禁止登录", user.ID, false)
 		return nil, ErrAccountLocked
 	}
 
 	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)) != nil {
 		// 累计失败次数，达到阈值锁定
 		updates := map[string]any{"fail_count": user.FailCount + 1}
-		if user.FailCount+1 >= s.maxFail {
+		locked := user.FailCount+1 >= s.maxFail
+		if locked {
 			until := time.Now().Add(time.Duration(s.lockMinutes) * time.Minute)
 			updates["locked_until"] = until
 			updates["fail_count"] = 0
 		}
 		s.db.Model(&user).Updates(updates)
-		s.audit.LogAsync(AuditEntry{LogType: "login", UserID: user.ID, Username: username, ClientIP: clientIP, Detail: "密码错误", Success: false})
-		if user.FailCount+1 >= s.maxFail {
+		detail := "密码错误"
+		if locked {
+			detail = fmt.Sprintf("密码错误，连续失败 %d 次已锁定账号 %d 分钟", s.maxFail, s.lockMinutes)
+		}
+		s.logLogin(username, clientIP, userAgent, detail, user.ID, false)
+		if locked {
 			return nil, ErrAccountLocked
 		}
 		return nil, ErrBadCredential
@@ -86,6 +109,7 @@ func (s *AuthService) Login(username, password, clientIP string) (*LoginResult, 
 	// 角色以关联表为准（多角色），JWT 里的 role 仅为「主角色」展示用
 	roles := s.rbac.RolesOf(user.ID)
 	if len(roles) == 0 {
+		s.logLogin(username, clientIP, userAgent, "账号未分配角色，登录被拒绝", user.ID, false)
 		return nil, errors.New("账号未分配角色，请联系管理员")
 	}
 	user.Role = roles[0]
@@ -102,7 +126,7 @@ func (s *AuthService) Login(username, password, clientIP string) (*LoginResult, 
 	if err != nil {
 		return nil, err
 	}
-	s.audit.LogAsync(AuditEntry{LogType: "login", UserID: user.ID, Username: username, ClientIP: clientIP, Detail: "登录成功"})
+	s.logLogin(username, clientIP, userAgent, "登录成功", user.ID, true)
 	return &LoginResult{AccessToken: access, RefreshToken: refresh, User: &user, Roles: roles}, nil
 }
 

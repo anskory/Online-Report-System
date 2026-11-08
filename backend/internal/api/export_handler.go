@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ce/report-system/backend/internal/pkg/resp"
 	"github.com/ce/report-system/backend/internal/service"
@@ -24,6 +25,21 @@ type ExportHandler struct {
 
 func NewExportHandler(exp *service.ExportService, reports *service.ReportService, audit *service.AuditService) *ExportHandler {
 	return &ExportHandler{exp: exp, reports: reports, audit: audit}
+}
+
+// logExport 记录导出审计：成功与失败都写，带报表名快照与耗时。
+// 失败尤其要记——导出失败往往是数据量、权限或 SQL 问题，靠它复盘最快。
+func (h *ExportHandler) logExport(c *gin.Context, id int64, detail string, err error, cost time.Duration) {
+	e := NewAuditEntry(c, "export", "export")
+	e.ReportID = &id
+	e.Target = h.reports.Name(id)
+	e.CostMs = int(cost.Milliseconds())
+	e.Detail = detail
+	if err != nil {
+		e.Success = service.BoolPtr(false)
+		e.ErrMsg = clipText(err.Error(), 240)
+	}
+	h.audit.LogAsync(e)
 }
 
 // Export POST /api/reports/:id/export
@@ -74,34 +90,33 @@ func (h *ExportHandler) Export(c *gin.Context) {
 	}
 
 	// 全部数据导出：原有流程（行数超限自动转异步任务）
+	start := time.Now()
 	out, err := h.exp.Export(c.Request.Context(), id, format, body.Params, body.SortCol, body.SortDir, uid, username)
 	if err != nil {
+		h.logExport(c, id, "导出失败（"+format+"）", err, time.Since(start))
 		mapEngineError(c, err)
 		return
 	}
 
 	if out.Sync {
-		// 同步流式导出
+		// 同步流式导出：日志放到流失效/结束之后再写，
+		// 避免「先把成功记上、实际写到一半断了」这种自相矛盾的日志
 		fileName := h.exp.SyncFileName(id, format)
 		h.setFileHeaders(c, format, fileName)
-		h.audit.LogAsync(service.AuditEntry{
-			LogType: "export", UserID: uid, Username: username, ClientIP: c.ClientIP(),
-			ReportID: &id, Detail: "同步导出 " + format,
-		})
 		if _, _, err := h.exp.StreamSync(c.Request.Context(), c.Writer, id, format, body.Params, body.SortCol, body.SortDir); err != nil {
 			// 头已发出无法改状态码，仅中断响应
+			h.logExport(c, id, "同步导出中断（"+format+"）", err, time.Since(start))
 			_ = c.AbortWithError(http.StatusInternalServerError, err)
 			return
 		}
 		c.AbortWithStatus(http.StatusOK)
+		h.logExport(c, id, "同步导出 "+format, nil, time.Since(start))
 		return
 	}
 
 	// 异步任务
-	h.audit.LogAsync(service.AuditEntry{
-		LogType: "export", UserID: uid, Username: username, ClientIP: c.ClientIP(),
-		ReportID: &id, Detail: "创建异步导出任务#" + strconv.FormatInt(out.Task.ID, 10) + " (" + format + ")",
-	})
+	h.logExport(c, id,
+		"创建异步导出任务#"+strconv.FormatInt(out.Task.ID, 10)+" ("+format+")", nil, time.Since(start))
 	resp.OK(c, out.Task)
 }
 
@@ -121,15 +136,14 @@ func (h *ExportHandler) exportRows(c *gin.Context, id int64, format string, uid 
 	}
 	fileName := h.exp.SyncFileName(id, format)
 	h.setFileHeaders(c, format, fileName)
+	start := time.Now()
 	if _, err := h.exp.WriteRows(c.Writer, format, columns, rows); err != nil {
+		h.logExport(c, id, fmt.Sprintf("导出勾选行失败（%d 行）", len(rows)), err, time.Since(start))
 		_ = c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
 	c.AbortWithStatus(http.StatusOK)
-	h.audit.LogAsync(service.AuditEntry{
-		LogType: "export", UserID: uid, Username: username, ClientIP: c.ClientIP(),
-		ReportID: &id, Detail: fmt.Sprintf("导出勾选行 %d 行 (%s)", len(rows), format),
-	})
+	h.logExport(c, id, fmt.Sprintf("导出勾选行 %d 行 (%s)", len(rows), format), nil, time.Since(start))
 }
 
 // exportPage 指定页导出：page 起始页（从 1 开始）+ pageSize 导出行数，始终同步流式
@@ -145,16 +159,15 @@ func (h *ExportHandler) exportPage(c *gin.Context, id int64, format string, uid 
 	offset := int64(page-1) * int64(pageSize)
 	fileName := h.exp.SyncFileName(id, format)
 	h.setFileHeaders(c, format, fileName)
+	start := time.Now()
 	if _, _, err := h.exp.StreamScoped(c.Request.Context(), c.Writer, id, format,
 		params, sortCol, sortDir, offset, int64(pageSize)); err != nil {
+		h.logExport(c, id, fmt.Sprintf("导出第 %d 页起 %d 行失败（%s）", page, pageSize, format), err, time.Since(start))
 		mapEngineError(c, err)
 		return
 	}
 	c.AbortWithStatus(http.StatusOK)
-	h.audit.LogAsync(service.AuditEntry{
-		LogType: "export", UserID: uid, Username: username, ClientIP: c.ClientIP(),
-		ReportID: &id, Detail: fmt.Sprintf("导出第 %d 页起 %d 行 (%s)", page, pageSize, format),
-	})
+	h.logExport(c, id, fmt.Sprintf("导出第 %d 页起 %d 行 (%s)", page, pageSize, format), nil, time.Since(start))
 }
 
 // setFileHeaders 预设下载响应头（文件名 + Content-Type）

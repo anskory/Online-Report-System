@@ -109,6 +109,28 @@ func (MySQLDriver) QuoteIdentifier(name string) string {
 
 func (MySQLDriver) Rebind(query string) string { return RebindQuestion(query) }
 
+// ListIndexes 索引清单：information_schema.statistics 按 seq_in_index 还原索引内的列顺序
+func (MySQLDriver) ListIndexes(ctx context.Context, db *sql.DB, table string) ([]IndexMeta, error) {
+	if err := ValidateTableRef(table); err != nil {
+		return nil, err
+	}
+	schema := ""
+	if i := strings.Index(table, "."); i >= 0 {
+		schema, table = table[:i], table[i+1:]
+	}
+	q := `SELECT index_name, COALESCE(column_name, ''), non_unique,
+       CASE WHEN index_name = 'PRIMARY' THEN 1 ELSE 0 END
+FROM information_schema.statistics
+WHERE table_name = ? AND table_schema = COALESCE(NULLIF(?, ''), DATABASE())
+ORDER BY index_name, seq_in_index`
+	rows, err := db.QueryContext(ctx, q, table, schema)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanIndexRows(rows)
+}
+
 func (MySQLDriver) Paginate(query string, offset, limit int) string {
 	return fmt.Sprintf("%s LIMIT %d OFFSET %d", query, limit, offset)
 }

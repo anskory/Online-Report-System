@@ -1,7 +1,7 @@
 {
   "name": "report-system-frontend",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.2.0",
   "type": "module",
   "description": "在线报表系统前端（Vue 3 + Vue Router + Element Plus + Vite；单入口 SPA，构建产物输出到 backend/internal/webui/dist 并由 go:embed 嵌入）",
   "scripts": {

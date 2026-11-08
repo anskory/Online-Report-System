@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/ce/report-system/backend/internal/model"
 	"github.com/ce/report-system/backend/internal/pkg/resp"
@@ -62,15 +63,27 @@ func (h *PublicHandler) Query(c *gin.Context) {
 	}
 	var body queryBody
 	_ = c.ShouldBindJSON(&body)
+	start := time.Now()
 	result, err := h.engine.Execute(c.Request.Context(), report.ID, body.Params, body.Page, body.PageSize, body.SortCol, body.SortDir)
+	cost := int(time.Since(start).Milliseconds())
+
+	// 匿名访问：UserID=0，用户名固定 anonymous；Target 存报表名快照。
+	// 失败同样记录——公开链接报错时运维最先看的就是日志里这条。
+	e := NewAuditEntry(c, "query", "report")
+	e.Username = "anonymous"
+	e.ReportID = &report.ID
+	e.Target = report.Name
+	e.CostMs = cost
 	if err != nil {
+		e.Success = service.BoolPtr(false)
+		e.ErrMsg = clipText(err.Error(), 240)
+		e.Detail = "公开访问查询失败"
+		h.audit.LogAsync(e)
 		mapEngineError(c, err)
 		return
 	}
-	h.audit.LogAsync(service.AuditEntry{
-		LogType: "query", Username: "anonymous", ClientIP: c.ClientIP(),
-		ReportID: &report.ID, Detail: "公开访问查询",
-	})
+	e.Detail = "公开访问查询"
+	h.audit.LogAsync(e)
 	resp.OK(c, result)
 }
 
@@ -127,6 +140,19 @@ func (h *PublicHandler) Export(c *gin.Context) {
 	}
 
 	var detail string
+	start := time.Now()
+	// 失败也留痕：公开链接是外部用户在用，报错时只能靠日志定位
+	logFail := func(what string, err error) {
+		e := NewAuditEntry(c, "export", "export")
+		e.Username = "anonymous"
+		e.ReportID = &report.ID
+		e.Target = report.Name
+		e.CostMs = int(time.Since(start).Milliseconds())
+		e.Success = service.BoolPtr(false)
+		e.ErrMsg = clipText(err.Error(), 240)
+		e.Detail = "公开访问导出失败（" + what + "）"
+		h.audit.LogAsync(e)
+	}
 	switch body.Scope {
 	case "rows":
 		// 勾选行导出：数据由前端回传，不再查询数据库
@@ -139,6 +165,7 @@ func (h *PublicHandler) Export(c *gin.Context) {
 			return
 		}
 		if _, err := h.exp.WriteRows(c.Writer, format, body.Columns, body.RowsData); err != nil {
+			logFail("勾选行", err)
 			_ = c.AbortWithError(http.StatusInternalServerError, err)
 			return
 		}
@@ -155,22 +182,27 @@ func (h *PublicHandler) Export(c *gin.Context) {
 		offset := int64(body.Page-1) * int64(body.PageSize)
 		if _, _, err := h.exp.StreamScoped(c.Request.Context(), c.Writer, report.ID, format,
 			body.Params, body.SortCol, body.SortDir, offset, int64(body.PageSize)); err != nil {
+			logFail("指定页", err)
 			mapEngineError(c, err)
 			return
 		}
 		detail = fmt.Sprintf("公开访问导出第 %d 页起 %d 行 (%s)", body.Page, body.PageSize, format)
 	default:
 		if _, _, err := h.exp.StreamSync(c.Request.Context(), c.Writer, report.ID, format, body.Params, body.SortCol, body.SortDir); err != nil {
+			logFail("全部数据", err)
 			_ = c.AbortWithError(http.StatusInternalServerError, err)
 			return
 		}
 		detail = "公开访问导出 " + format
 	}
 	c.AbortWithStatus(http.StatusOK)
-	h.audit.LogAsync(service.AuditEntry{
-		LogType: "export", Username: "anonymous", ClientIP: c.ClientIP(),
-		ReportID: &report.ID, Detail: detail,
-	})
+	e := NewAuditEntry(c, "export", "export")
+	e.Username = "anonymous"
+	e.ReportID = &report.ID
+	e.Target = report.Name
+	e.CostMs = int(time.Since(start).Milliseconds())
+	e.Detail = detail
+	h.audit.LogAsync(e)
 }
 
 // ColCfgGet GET /api/pub/:publicId/column-config 匿名列配置（所有匿名用户共用一套）

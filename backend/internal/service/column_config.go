@@ -18,7 +18,9 @@ func NewColumnConfigService(db *gorm.DB) *ColumnConfigService {
 	return &ColumnConfigService{db: db}
 }
 
-// cfgMaxSize 配置 JSON 大小上限（列数再多也不会超过，防滥用）
+// cfgMaxSize 配置 JSON 大小上限，与 rpt_column_config.config 的 TEXT(64KB) 对齐。
+// 注意：宽表（几百列）的列配置并不小——每列约 50~60 字节，800 列已到 45KB 左右，
+// 所以这不是「列数再多也不会超过」的保险值，而是真实的容量边界。
 const cfgMaxSize = 64 * 1024
 
 // Get 读取配置 JSON，从未设置过返回空字符串。
@@ -43,7 +45,7 @@ func (s *ColumnConfigService) Save(reportID, userID int64, config string) error 
 		return fmt.Errorf("列配置内容为空")
 	}
 	if len(config) > cfgMaxSize {
-		return fmt.Errorf("列配置过大（超过 64KB）")
+		return fmt.Errorf("列配置过大（%d 字节，上限 64KB）：该报表启用列过多，请先在配置页减少启用列", len(config))
 	}
 	var recs []model.ReportColumnConfig
 	err := s.db.Where("report_id = ? AND user_id = ?", reportID, userID).Limit(1).Find(&recs).Error

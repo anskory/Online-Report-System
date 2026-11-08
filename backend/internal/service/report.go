@@ -139,6 +139,28 @@ func (s *ReportService) GetFull(id int64) (*model.Report, []model.ReportParam, [
 	return &r, params, cols, nil
 }
 
+// logChange 记录报表配置变更审计：统一补 Module 与 Target（报表名快照）。
+// 报表删除后日志只剩 ID 是读不懂的，所以一律带名字。
+func (s *ReportService) logChange(id int64, userID int64, username, target, detail string) {
+	s.audit.LogAsync(AuditEntry{
+		LogType: "config_change", Module: "report",
+		UserID: userID, Username: username,
+		ReportID: &id, Target: target, Detail: detail,
+	})
+}
+
+// reportName 取报表名用于日志快照；取不到返回空串（不阻断主流程）
+func (s *ReportService) reportName(id int64) string {
+	var r model.Report
+	if err := s.db.Select("name").First(&r, id).Error; err != nil {
+		return ""
+	}
+	return r.Name
+}
+
+// Name 取报表名（供 handler 层写审计日志做 Target 快照，避免拉全量配置）
+func (s *ReportService) Name(id int64) string { return s.reportName(id) }
+
 // Save 新建或更新报表（含条件、列、角色授权），返回报表 ID
 func (s *ReportService) Save(id int64, in *ReportInput, userID int64, username string) (int64, error) {
 	if err := validateSQLText(in.SQLText); err != nil {
@@ -227,12 +249,13 @@ func (s *ReportService) Save(id int64, in *ReportInput, userID int64, username s
 		id = savedID
 	}
 	cacheInvalidate(id)
-	s.audit.LogAsync(AuditEntry{LogType: "config_change", UserID: userID, Username: username, ReportID: &id, Detail: fmt.Sprintf("保存报表 %s", in.Name)})
+	s.logChange(id, userID, username, in.Name, fmt.Sprintf("保存报表 %s", in.Name))
 	return id, nil
 }
 
 // Delete 删除报表
 func (s *ReportService) Delete(id int64, userID int64, username string) error {
+	name := s.reportName(id) // 删除后就查不到了，先取名字做日志快照
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		res := tx.Delete(&model.Report{}, id)
 		if res.Error != nil {
@@ -256,7 +279,11 @@ func (s *ReportService) Delete(id int64, userID int64, username string) error {
 		return err
 	}
 	cacheInvalidate(id)
-	s.audit.LogAsync(AuditEntry{LogType: "config_change", UserID: userID, Username: username, ReportID: &id, Detail: "删除报表"})
+	detail := "删除报表"
+	if name != "" {
+		detail += " " + name
+	}
+	s.logChange(id, userID, username, name, detail)
 	return nil
 }
 
@@ -269,7 +296,7 @@ func (s *ReportService) SetStatus(id int64, status string, userID int64, usernam
 		return err
 	}
 	cacheInvalidate(id)
-	s.audit.LogAsync(AuditEntry{LogType: "config_change", UserID: userID, Username: username, ReportID: &id, Detail: "报表状态 → " + status})
+	s.logChange(id, userID, username, s.reportName(id), "报表状态 → "+status)
 	return nil
 }
 
@@ -292,7 +319,7 @@ func (s *ReportService) EnablePublic(id int64, userID int64, username string) (p
 		return "", "", err
 	}
 	cacheInvalidate(id)
-	s.audit.LogAsync(AuditEntry{LogType: "config_change", UserID: userID, Username: username, ReportID: &id, Detail: "开启公开访问"})
+	s.logChange(id, userID, username, r.Name, "开启公开访问")
 	return *pid, token, nil
 }
 
@@ -301,7 +328,7 @@ func (s *ReportService) DisablePublic(id int64, userID int64, username string) e
 	err := s.db.Model(&model.Report{}).Where("id = ?", id).Updates(map[string]any{"is_public": 0, "public_token": ""}).Error
 	cacheInvalidate(id)
 	if err == nil {
-		s.audit.LogAsync(AuditEntry{LogType: "config_change", UserID: userID, Username: username, ReportID: &id, Detail: "关闭公开访问"})
+		s.logChange(id, userID, username, s.reportName(id), "关闭公开访问")
 	}
 	return err
 }
@@ -317,7 +344,7 @@ func (s *ReportService) SetPublicExport(id int64, allow int, userID int64, usern
 		if allow == 1 {
 			detail = "允许公开导出"
 		}
-		s.audit.LogAsync(AuditEntry{LogType: "config_change", UserID: userID, Username: username, ReportID: &id, Detail: detail})
+		s.logChange(id, userID, username, s.reportName(id), detail)
 	}
 	return err
 }

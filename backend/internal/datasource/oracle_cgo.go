@@ -215,6 +215,11 @@ func (OracleDriverCGO) QuoteIdentifier(name string) string {
 	return `"` + strings.ReplaceAll(strings.ToUpper(name), `"`, `""`) + `"`
 }
 
+// ListIndexes 索引清单（与 go-ora 版共用 oracle_common.go 里的实现）
+func (OracleDriverCGO) ListIndexes(ctx context.Context, db *sql.DB, table string) ([]IndexMeta, error) {
+	return oracleListIndexes(ctx, db, table)
+}
+
 func (OracleDriverCGO) Rebind(query string) string { return query } // Oracle 原生 :name
 
 // Paginate 默认分页：12c+ 的 OFFSET/FETCH（未知版本也按此处理）

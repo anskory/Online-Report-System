@@ -126,6 +126,35 @@ func (PostgresDriver) QuoteIdentifier(name string) string {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
 }
 
+// ListIndexes 索引清单：pg_index + pg_attribute，按 indkey 在索引内的序号（ord）还原列序
+func (PostgresDriver) ListIndexes(ctx context.Context, db *sql.DB, table string) ([]IndexMeta, error) {
+	if err := ValidateTableRef(table); err != nil {
+		return nil, err
+	}
+	schema := ""
+	if i := strings.Index(table, "."); i >= 0 {
+		schema, table = table[:i], table[i+1:]
+	}
+	q := `SELECT i.relname AS index_name,
+       a.attname AS column_name,
+       CASE WHEN ix.indisunique THEN 0 ELSE 1 END AS non_unique,
+       CASE WHEN ix.indisprimary THEN 1 ELSE 0 END AS is_primary
+FROM pg_index ix
+JOIN pg_class i ON i.oid = ix.indexrelid
+JOIN pg_class t ON t.oid = ix.indrelid
+JOIN pg_namespace n ON n.oid = t.relnamespace
+JOIN LATERAL unnest(ix.indkey) WITH ORDINALITY AS k(attnum, ord) ON true
+JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum
+WHERE t.relname = $1 AND n.nspname = COALESCE(NULLIF($2, ''), current_schema())
+ORDER BY i.relname, k.ord`
+	rows, err := db.QueryContext(ctx, q, table, schema)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanIndexRows(rows)
+}
+
 // Rebind :name → $1..$n（按出现顺序编号；跳过字符串字面量）
 func (PostgresDriver) Rebind(query string) string {
 	i := 0

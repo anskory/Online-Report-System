@@ -33,7 +33,7 @@
             </el-input>
           </el-form-item>
           <el-form-item>
-            <el-input v-model="password" type="password" placeholder="密码" size="large" show-password @keyup.enter="doLogin">
+            <el-input v-model="password" type="password" placeholder="密码" size="large" show-password>
               <template #prefix><i-lock style="width:16px;height:16px"></i-lock></template>
             </el-input>
           </el-form-item>
@@ -63,6 +63,8 @@ export default {
   methods: {
     doLogin: function () {
       var self = this;
+      // 防重入：请求进行中直接忽略（防回车/按钮重复触发导致重复登录、日志双写）
+      if (this.loading) return;
       if (!this.username || !this.password) {
         ElMessage.warning('请输入用户名和密码');
         return;

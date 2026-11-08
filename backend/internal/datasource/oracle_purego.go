@@ -24,12 +24,18 @@ type OracleDriverPureGo struct{}
 
 func init() { Register("oracle", OracleDriverPureGo{}) }
 
-// 编译期校验：确保实现与接口一致（ColumnComments/PaginateFor 为可选接口）
+// 编译期校验：确保实现与接口一致（ColumnComments/PaginateFor/ListIndexes 为可选接口）
 var (
 	_ Driver                 = OracleDriverPureGo{}
 	_ ColumnCommentProvider  = OracleDriverPureGo{}
+	_ IndexProvider          = OracleDriverPureGo{}
 	_ interface{ PaginateFor(string, string, int, int) string } = OracleDriverPureGo{}
 )
+
+// ListIndexes 索引清单（与 godror 版共用 oracle_common.go 里的实现）
+func (OracleDriverPureGo) ListIndexes(ctx context.Context, db *sql.DB, table string) ([]IndexMeta, error) {
+	return oracleListIndexes(ctx, db, table)
+}
 
 // BuildDSN 构建 go-ora 的 URL 形式 DSN：oracle://user:pass@host:port/service
 func (OracleDriverPureGo) BuildDSN(c ConnConfig) (string, error) {

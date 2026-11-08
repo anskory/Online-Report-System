@@ -103,7 +103,11 @@
                     </el-option>
                   </el-select>
                   <el-button size="small" style="margin-left:8px" :loading="pick.loadingTables"
-                             @click="loadTables('')">刷新表清单</el-button>
+                             @click="loadTables('', true)">刷新表清单</el-button>
+                  <span class="muted" style="margin-left:8px">
+                    {{ pick.total }} 张{{ pick.truncated ? '（已截断，请用关键字精确搜索）' : '' }}
+                    <template v-if="cacheAgoText">· {{ cacheAgoText }}</template>
+                  </span>
                 </el-form-item>
 
                 <el-form-item label="输出字段" v-if="pick.columns.length">
@@ -113,9 +117,14 @@
                                    @change="toggleAllCols">
                         全选（已选 {{ pick.cols.length }} / 共 {{ pick.columns.length }}）
                       </el-checkbox>
-                      <el-button size="small" type="primary" @click="applyPick">
-                        生成 SQL 并填充展示列
-                      </el-button>
+                      <div>
+                        <el-button size="small" :loading="idx.loading" @click="openIndexes">
+                          查看索引{{ idx.list.length ? '（' + idx.list.length + '）' : '' }}
+                        </el-button>
+                        <el-button size="small" type="primary" @click="applyPick">
+                          生成 SQL 并填充展示列
+                        </el-button>
+                      </div>
                     </div>
                     <div class="cfg-picker-list">
                       <el-checkbox v-for="c in pick.columns" :key="c.name"
@@ -561,6 +570,32 @@
           <div class="muted" style="margin-top:6px">⚠️ 令牌仅显示这一次，关闭后需重新生成</div>
         </div>
       </el-dialog>
+
+      <!-- 表索引浏览（只读）：判断排序/过滤字段是否走索引，配合慢查询排查 -->
+      <el-dialog v-model="idx.visible" :title="'表索引：' + (pick.table || '')" width="640px">
+        <div v-if="idx.loading" class="muted">加载中…</div>
+        <div v-else-if="!idx.list.length" class="muted">
+          该表没有索引，或当前数据库类型不支持索引浏览
+        </div>
+        <el-table v-else :data="idx.list" size="small" border max-height="420">
+          <el-table-column prop="name" label="索引名" min-width="200" show-overflow-tooltip />
+          <el-table-column label="类型" width="96">
+            <template #default="{ row }">
+              <el-tag v-if="row.primary" type="danger" size="small">主键</el-tag>
+              <el-tag v-else-if="row.unique" type="warning" size="small">唯一</el-tag>
+              <el-tag v-else type="info" size="small">普通</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="索引列（按顺序）" min-width="260">
+            <template #default="{ row }">
+              <span class="mono">{{ (row.columns || []).join(', ') }}</span>
+            </template>
+          </el-table-column>
+        </el-table>
+        <div class="muted" style="margin-top:10px">
+          索引仅用于参考：查询条件里对索引列做函数运算（如 <span class="mono">TO_CHAR(dt,'YYYY')</span>）会导致索引失效
+        </div>
+      </el-dialog>
   </div>
 </template>
 
@@ -593,7 +628,13 @@ export default {
       publicVisible: false, publicLoading: false, publicLink: '',
       colSel: [], dragIdx: -1,
       // 取数方式：sql=手写 SQL / table=选数据源→选表→勾字段后自动生成 SQL
-      pick: { mode: 'sql', table: '', cols: [], tables: [], columns: [], loadingTables: false },
+      // tables 为当前关键字命中的表清单（后端缓存后内存过滤，total/truncated 用于提示截断）
+      pick: {
+        mode: 'sql', table: '', cols: [], tables: [], columns: [],
+        loadingTables: false, total: 0, truncated: false, ageSec: 0, timer: 0
+      },
+      // 表索引浏览（只读）
+      idx: { visible: false, loading: false, list: [] },
       // 展示列分页/筛选：列数上百时只渲染当前页，避免一次性挂载上千个表单控件
       colPage: 1, colPageSize: 20, colKeyword: '', colFilter: 'all',
       // 右侧详情面板：当前选中列 + 折叠面板展开项
@@ -602,6 +643,14 @@ export default {
     };
   },
   computed: {
+    /** 表清单的缓存年龄文案：让用户知道看到的是「刚扫的」还是「几分钟前的快照」 */
+    cacheAgoText: function () {
+      var s = this.pick.ageSec || 0;
+      if (s <= 0) return '';
+      if (s < 60) return '缓存 ' + s + ' 秒前';
+      if (s < 3600) return '缓存 ' + Math.round(s / 60) + ' 分钟前';
+      return '缓存 ' + Math.round(s / 3600) + ' 小时前';
+    },
     /** 参数名 → 条件项 索引（O(1) 查找，避免每行渲染线性扫描 params） */
     paramMap: function () {
       var m = {};
@@ -743,17 +792,27 @@ export default {
       if (this.pick.mode === 'table') this.loadTables('');
     },
     /**
-     * 拉取表清单（含视图）
+     * 拉取表清单（含视图）。
+     * 后端对表清单做了 TTL 缓存：keyword 由后端在缓存的全量清单上内存过滤，
+     * 所以这里可以放心逐字搜索（配合 250ms 防抖，避免连续输入产生过多请求）。
      * @param {string} kw 表名关键字，空串取全部
+     * @param {boolean} force 是否强制重扫业务库（「刷新表清单」按钮）
      */
-    loadTables: function (kw) {
+    loadTables: function (kw, force) {
       var self = this;
       if (!this.form.datasourceId) { this.pick.loadingTables = false; return; }
       this.pick.loadingTables = true;
-      var url = '/api/datasources/' + this.form.datasourceId + '/tables' +
-        (kw ? '?keyword=' + encodeURIComponent(kw) : '');
+      var qs = [];
+      if (kw) qs.push('keyword=' + encodeURIComponent(kw));
+      if (force) qs.push('refresh=1');
+      var url = '/api/datasources/' + this.form.datasourceId + '/tables' + (qs.length ? '?' + qs.join('&') : '');
       RS.get(url)
-        .then(function (list) { self.pick.tables = list || []; })
+        .then(function (res) {
+          self.pick.tables = (res && res.items) || [];
+          self.pick.total = (res && res.total) || self.pick.tables.length;
+          self.pick.truncated = !!(res && res.truncated);
+          self.pick.ageSec = (res && res.ageSec) || 0;
+        })
         .catch(function (e) {
           self.pick.tables = [];
           // 没有「数据源查看」权限时浏览表结构会被拦，提示换成手写 SQL 比抛原始 403 有用
@@ -765,21 +824,38 @@ export default {
         })
         .finally(function () { self.pick.loadingTables = false; });
     },
-    /** 表下拉的远程搜索（el-select filterable remote） */
-    searchTables: function (kw) { this.loadTables(kw || ''); },
+    /** 表下拉的远程搜索（el-select filterable remote）：250ms 防抖 */
+    searchTables: function (kw) {
+      var self = this;
+      clearTimeout(this.pick.timer);
+      this.pick.timer = setTimeout(function () { self.loadTables(kw || ''); }, 250);
+    },
     /** 选中表后加载字段，默认全选（大多数报表要的就是全字段） */
     onTableChange: function (name) {
       var self = this;
       this.pick.columns = [];
       this.pick.cols = [];
+      this.idx.list = [];
       if (!name) return;
       RS.get('/api/datasources/' + this.form.datasourceId + '/tables/' +
         encodeURIComponent(name) + '/columns')
-        .then(function (list) {
-          self.pick.columns = list || [];
+        .then(function (res) {
+          self.pick.columns = (res && res.items) || [];
           self.pick.cols = self.pick.columns.map(function (c) { return c.name; });
         })
         .catch(function (e) { RS.alertErr(e); });
+    },
+    /** 打开当前表的索引清单（只读，用于判断排序字段是否走索引） */
+    openIndexes: function () {
+      var self = this;
+      if (!this.pick.table) { ElMessage.warning('请先选择数据表'); return; }
+      this.idx.visible = true;
+      this.idx.loading = true;
+      RS.get('/api/datasources/' + this.form.datasourceId + '/tables/' +
+        encodeURIComponent(this.pick.table) + '/indexes')
+        .then(function (list) { self.idx.list = list || []; })
+        .catch(function (e) { self.idx.list = []; RS.alertErr(e); })
+        .finally(function () { self.idx.loading = false; });
     },
     /** 单个字段勾选/取消 */
     toggleCol: function (name, on) {
@@ -795,13 +871,34 @@ export default {
     },
     /**
      * 选表结果落地：生成 SELECT 语句 + 同步填充展示列。
-     * 字段多时一行一个，少量字段放一行，生成的 SQL 都直接可读、可继续手改。
+     * 优先调用后端统一生成器（引号处理、保留字、跨模式表名等规则只有一份）；
+     * 接口不可用时回退到本地拼串，保证配置页在离线/权限受限时仍可用。
      */
     applyPick: function () {
       if (!this.pick.table || !this.pick.cols.length) {
         ElMessage.warning('请先选择数据表和输出字段');
         return;
       }
+      var self = this;
+      var cols = this.pick.cols.slice();
+      RS.post('/api/report-wizard/generate', {
+        datasourceId: this.form.datasourceId,
+        table: this.pick.table,
+        columns: cols.map(function (n) { return { name: n }; }),
+        withParams: false
+      })
+        .then(function (res) {
+          self.form.sqlText = res.sqlText;
+          var added = self.mergeColumns((res.columns || []).map(function (c) {
+            return { name: c.colName, label: c.label };
+          }));
+          ElMessage.success('已生成 SQL' +
+            (added ? '，并填充 ' + added + ' 个展示列' : '（展示列已存在，未重复添加）'));
+        })
+        .catch(function () { self.applyPickLocal(); });
+    },
+    /** 本地兜底：接口不可用时按简单规则拼 SQL（不含引号/保留字处理） */
+    applyPickLocal: function () {
       var table = this.pick.table;
       var cols = this.pick.cols.slice();
       this.form.sqlText = cols.length > 6

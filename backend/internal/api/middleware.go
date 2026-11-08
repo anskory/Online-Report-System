@@ -2,6 +2,8 @@
 package api
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"strings"
 
 	"github.com/ce/report-system/backend/internal/pkg/jwtutil"
@@ -12,11 +14,45 @@ import (
 
 // 上下文中的当前用户信息 key
 const (
-	CtxUserID   = "uid"
-	CtxUsername = "uname"
-	CtxRoles    = "roles" // []string 角色标识集合
-	CtxPerms    = "perms" // map[string]struct{} 权限点集合（含 * 表示全部）
+	CtxUserID    = "uid"
+	CtxUsername  = "uname"
+	CtxRoles     = "roles" // []string 角色标识集合
+	CtxPerms     = "perms" // map[string]struct{} 权限点集合（含 * 表示全部）
+	CtxTraceID   = "trace" // 请求链路 ID（审计日志串联用）
+	CtxUserAgent = "ua"    // 客户端 UA（审计日志用）
 )
+
+// RequestMeta 为每个请求生成 TraceID 并记录 UA。
+// 审计日志里的 traceId 能把「同一次请求产生的多条日志」串起来（如导出任务创建 + 立即失败）。
+func RequestMeta() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Set(CtxTraceID, newTraceID())
+		c.Set(CtxUserAgent, c.Request.UserAgent())
+		c.Next()
+	}
+}
+
+// newTraceID 生成 16 位十六进制随机串（无需引入 uuid 依赖）
+func newTraceID() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(b)
+}
+
+// NewAuditEntry 构造带请求元信息的审计条目：统一填 IP / UA / TraceID / 当前用户。
+// 调用方只需补 LogType、Module、Target、Detail 等业务字段。
+func NewAuditEntry(c *gin.Context, logType, module string) service.AuditEntry {
+	uid, uname := CurrentUser(c)
+	return service.AuditEntry{
+		LogType: logType, Module: module,
+		UserID: uid, Username: uname,
+		ClientIP:  c.ClientIP(),
+		UserAgent: c.GetString(CtxUserAgent),
+		TraceID:   c.GetString(CtxTraceID),
+	}
+}
 
 // JWTAuth 登录鉴权中间件：校验 Bearer Token，并加载用户「当前」角色与权限点。
 // 角色不作为令牌的信任源——每次请求都按库中的用户-角色关联解析，

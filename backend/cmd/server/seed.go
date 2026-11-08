@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"strings"
 
 	"github.com/ce/report-system/backend/internal/model"
@@ -44,12 +45,53 @@ func seedRBAC(db *gorm.DB) error {
 		}
 	}
 
+	// 已有库的增量菜单：defaultMenus 只在菜单表为空时执行，
+	// 已部署环境必须靠这一步补上后续版本新增的菜单，否则新页面永远进不去
+	if err := ensureExtraMenus(db); err != nil {
+		return err
+	}
+
 	// 历史库里的菜单路径还是 /ui/xxx.html，统一改成干净地址（幂等）
 	if err := normalizeMenuPaths(db); err != nil {
 		return err
 	}
 
 	return service.BackfillUserRoles(db)
+}
+
+// ensureExtraMenus 幂等补齐后续版本新增的菜单与权限点（已存在则跳过）。
+// 判定用「ID 或权限标识」双条件：既避免与用户手工创建的菜单 ID 撞车，
+// 也避免重复插一条同样的权限点。
+func ensureExtraMenus(db *gorm.DB) error {
+	for _, m := range auditMenus() {
+		var cnt int64
+		if err := db.Model(&model.Menu{}).
+			Where("id = ? OR (perms <> '' AND perms = ?)", m.ID, m.Perms).
+			Count(&cnt).Error; err != nil {
+			return err
+		}
+		if cnt > 0 {
+			continue
+		}
+		if err := db.Create(&m).Error; err != nil {
+			return err
+		}
+		log.Printf("[启动] 已补充菜单：%s（%s）", m.MenuName, m.Perms)
+	}
+	return nil
+}
+
+// auditMenus 操作日志相关菜单与权限点（v1.2 新增）。
+// 既追加到全新库的默认菜单，也用于已有库的增量补齐。
+func auditMenus() []model.Menu {
+	return []model.Menu{
+		{ID: 54, ParentID: 5, MenuName: "操作日志", MenuType: "C", Path: "/audit-logs",
+			Perms: "system:audit:list", Icon: "Tickets", SortNo: 4, Visible: 1, Status: 1},
+		{ID: 541, ParentID: 54, MenuName: "导出日志", MenuType: "F",
+			Perms: "system:audit:export", SortNo: 1, Visible: 1, Status: 1},
+		{ID: 542, ParentID: 54, MenuName: "清理日志", MenuType: "F",
+			Perms: "system:audit:delete", SortNo: 2, Visible: 1, Status: 1},
+	}
 }
 
 // normalizeMenuPaths 把历史菜单路径 /ui/<name>.html 改写为 /<name>。
@@ -87,7 +129,7 @@ func defaultMenus() []model.Menu {
 		return model.Menu{ID: id, ParentID: parent, MenuName: name, MenuType: "F",
 			Perms: perms, SortNo: sort, Visible: 1, Status: 1}
 	}
-	return []model.Menu{
+	menus := []model.Menu{
 		page(1, 0, "报表中心", "/reports", "report:view", 1, "Document"),
 		page(2, 0, "报表配置", "/config", "report:update", 2, "EditPen"),
 		button(21, 2, "新建报表", "report:create", 1),
@@ -122,4 +164,6 @@ func defaultMenus() []model.Menu {
 		button(532, 53, "修改菜单", "system:menu:update", 2),
 		button(533, 53, "删除菜单", "system:menu:delete", 3),
 	}
+	// v1.2 新增的「操作日志」菜单与权限点（已有库由 ensureExtraMenus 补齐）
+	return append(menus, auditMenus()...)
 }

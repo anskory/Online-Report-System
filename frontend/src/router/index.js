@@ -76,6 +76,12 @@ const routes = [
         component: () => import('@/pages/Menus.vue'),
         meta: { title: '菜单管理', perm: 'system:menu:list' },
       },
+      {
+        path: 'audit-logs',
+        name: 'auditLogs',
+        component: () => import('@/pages/AuditLogs.vue'),
+        meta: { title: '操作日志', perm: 'system:audit:list' },
+      },
     ],
   },
   // 兜底：未知路径回到报表中心（未登录时再被守卫送登录页）

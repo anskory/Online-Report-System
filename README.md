@@ -4,7 +4,7 @@
 >
 > 后端 Go（Gin + GORM），前端 Vue 3（Element Plus + Vite），前端产物 `go:embed` 打进二进制——**单文件交付**，默认 SQLite 内嵌，无需额外安装数据库。
 
-当前版本：`v1.0`　|　默认端口：`18080`　|　默认账号：`admin / admin123`（首次登录后请立即修改）
+当前版本：`v1.2`　|　默认端口：`18080`　|　默认账号：`admin / admin123`（首次登录后请立即修改）
 
 ---
 
@@ -169,7 +169,9 @@ Vite 已配置代理：`/api` 与 `/r` 转发到 `http://127.0.0.1:18080`（可�
 | `security.login_lock_minutes` | `10` | 锁定时长（分钟） |
 | `log.level` | `info` | 日志级别 |
 | `log.slow_query_ms` | `5000` | 慢查询阈值 |
-| `log.audit_retention_days` | `90` | 审计日志保留天数 |
+| `log.audit_retention_days` | `90` | 审计日志保留天数（启动先清一次，之后每 6 小时；`<=0` 关闭清理） |
+| `log.audit_sync` | `false` | `true`=审计日志同步写（排障用，会影响响应耗时） |
+| `log.audit_queue_size` | `2048` | 审计写入队列长度；满队列丢弃日志并计数（`/api/health` 的 `auditDropped`） |
 | `export.dir` | `./data/exports` | 导出文件目录 |
 | `export.sync_row_limit` | `10000` | 行数 ≤ 此值同步流式导出，超过转异步任务 |
 | `export.workers` | `2` | 异步导出 Worker 数 |
@@ -177,6 +179,8 @@ Vite 已配置代理：`/api` 与 `/r` 转发到 `http://127.0.0.1:18080`（可�
 | `export.xlsx_sheet_max_row` | `1000000` | 单 Sheet 行数上限，超出自动拆 Sheet2… |
 | `query.count_timeout_sec` | `5` | `COUNT(*)` 单独超时，超时降级为「总数未知」 |
 | `query.count_cache_sec` | `30` | 总数统计缓存秒数，翻页复用 |
+| `meta.cache_ttl_sec` | `300` | 表/字段元数据缓存有效期（秒）；`0`=不缓存，每次实时扫描 |
+| `meta.table_limit` | `3000` | 单次返回表数量上限（超出截断并回传真实总数，关键字搜索不受限） |
 
 ---
 
@@ -197,7 +201,7 @@ Vite 已配置代理：`/api` 与 `/r` 转发到 `http://127.0.0.1:18080`（可�
 
 - **认证**：JWT（`Authorization: Bearer <token>`），登录失败 `login_max_fail` 次锁定 `login_lock_minutes` 分钟
 - **角色**：内置 `admin`（超级管理员，隐式拥有全部权限）、`user`（普通用户，仅查看已授权且已发布的报表），可自建角色
-- **权限点**：菜单与按钮级，按 `资源:动作` 命名，例如 `report:create`、`report:publish`、`datasource:test`、`dict:list`、`system:user:list`
+- **权限点**：菜单与按钮级，按 `资源:动作` 命名，例如 `report:create`、`report:publish`、`datasource:test`、`dict:list`、`system:user:list`、`system:audit:list`（日志查看）、`system:audit:export`、`system:audit:delete`
 - **报表授权**：角色 ↔ 报表 多对多（`rpt_role_report`），普通用户只看到授权范围内的报表
 - **菜单**：数据库驱动，可在「菜单管理」中增删改，前端按 `/api/menus/my` 动态渲染侧栏
 
@@ -215,9 +219,11 @@ Vite 已配置代理：`/api` 与 `/r` 转发到 `http://127.0.0.1:18080`（可�
 | 导出 | `POST /api/reports/:id/export`、`GET /api/export-tasks`、`GET /api/export-tasks/:id`、`GET /api/export-tasks/:id/download` |
 | 列配置 | `GET·PUT·DELETE /api/reports/:id/column-config` |
 | 数据源 | `GET/POST/PUT/DELETE /api/datasources`、`POST /api/datasources/test`、`POST /api/datasources/:id/test` |
-| 元数据 | `GET /api/datasources/:id/tables`、`GET /api/datasources/:id/tables/:name/columns` |
+| 元数据 | `GET /api/datasources/:id/tables?keyword=&refresh=1&limit=`（返回 `{items,total,truncated,cached,ageSec}`）、`GET .../tables/:name/columns`、`GET .../tables/:name/indexes`、`POST /api/datasources/:id/meta/clear`（手动清该数据源缓存，DDL 后不必等 TTL） |
+| 表生成报表 | `POST /api/report-wizard/generate`（只生成 SQL/列/条件草稿，不落库；保存仍走 `POST /api/reports`） |
 | 字典 | `GET/POST/PUT/DELETE /api/dictionaries`、`GET /api/dictionaries/:id/types`、`POST /api/dictionaries/options` |
 | 系统管理 | `/api/system/users`、`/api/system/roles`、`/api/system/menus`（含角色-菜单、角色-报表授权） |
+| 操作日志 | `GET /api/system/audit-logs`、`GET /api/system/audit-logs/stats`、`GET /api/system/audit-logs/export`、`DELETE /api/system/audit-logs?before=YYYY-MM-DD` |
 | 公开访问 | `GET /api/pub/:publicId/info`、`POST /api/pub/:publicId/query`（options、export 同路径）、`/api/pub/:publicId/column-config` |
 
 响应格式统一为 `{ "code": 0, "msg": "ok", "data": ... }`，`code != 0` 时 `msg` 为可读错误信息。
@@ -381,4 +387,5 @@ sqlite3 data/report_sys.db "UPDATE sys_user SET password_hash='<上面输出的�
 - **主题**：明暗模式由 `html.dark` 驱动，Element 变量与自定义令牌同时切换；新增样式禁止写死颜色，统一用 `var(--rs-*)`
 - **后端分层**：`api`（HTTP 编排）→ `service`（业务）→ `datasource`（驱动注册制），新增数据库类型实现 `Driver` 接口并在 `manager` 注册即可
 - **SQL 处理**：参数占位符、字符串/注释掩码、Oracle 命名参数去重绑定均在 `service/query_engine.go` 与 `datasource/driver.go` 集中处理，改绑定逻辑前请先读这两处的分词状态机
-- **提交前**：`go build ./...` 与前端 `npm run build` 均需通过
+- **提交前**：`go build ./...`、`go test ./...` 与前端 `npm run build` 均需通过
+- **单测**：`service/report_wizard_test.go` 覆盖从表建报表的 SQL 生成（跨模式表名、中文别名、主键兜底排序、DISTINCT、无主键告警、注入拦截、500 列大宽表、SQL 超 60KB 报错）；生成器依赖的元数据能力已抽为 `wizardMeta` 接口，新增用例无需连数据库

@@ -31,7 +31,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, 2001, "用户名和密码不能为空")
 		return
 	}
-	result, err := h.auth.Login(req.Username, req.Password, c.ClientIP())
+	result, err := h.auth.Login(req.Username, req.Password, c.ClientIP(), c.Request.UserAgent())
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrAccountLocked):

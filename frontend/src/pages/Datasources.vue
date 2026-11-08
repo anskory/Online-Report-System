@@ -22,10 +22,11 @@
           </template>
         </el-table-column>
         <el-table-column prop="username" label="用户" width="110"></el-table-column>
-        <el-table-column label="操作" width="280" fixed="right">
+        <el-table-column label="操作" width="340" fixed="right">
           <template #default="s">
             <el-button v-if="can('datasource:test')" size="small" type="primary" link :loading="s.row._testing" @click="testById(s.row)">测试连接</el-button>
             <el-button size="small" type="primary" link @click="browse(s.row)">字段扫描</el-button>
+            <el-button v-if="can('datasource:update')" size="small" link @click="clearMeta(s.row)">清缓存</el-button>
             <el-button v-if="can('datasource:update')" size="small" link @click="openDialog(s.row)">编辑</el-button>
             <el-button v-if="can('datasource:delete')" size="small" type="danger" link @click="remove(s.row)">删除</el-button>
           </template>
@@ -171,6 +172,12 @@ export default {
         .catch(function (e) { RS.alertErr(e); })
         .finally(function () { row._testing = false; });
     },
+    /** 清空该数据源的元数据缓存：刚做完 DDL（加表/加字段）时不必等 TTL 过期 */
+    clearMeta: function (row) {
+      RS.post('/api/datasources/' + row.id + '/meta/clear')
+        .then(function () { ElMessage.success('已清空「' + row.name + '」的元数据缓存'); })
+        .catch(function (e) { RS.alertErr(e); });
+    },
     browse: function (row) {
       this.browseDs = row;
       this.browseVisible = true;
@@ -178,7 +185,8 @@ export default {
       var self = this;
       this.tablesLoading = true;
       RS.get('/api/datasources/' + row.id + '/tables')
-        .then(function (t) { self.tables = t; })
+        // 表清单接口现在返回 {items,total,truncated,cached,ageSec}（带 TTL 缓存）
+        .then(function (res) { self.tables = (res && res.items) || []; })
         .catch(function (e) { RS.alertErr(e); })
         .finally(function () { self.tablesLoading = false; });
     },
@@ -187,7 +195,7 @@ export default {
       this.columnsLoading = true;
       var self = this;
       RS.get('/api/datasources/' + this.browseDs.id + '/tables/' + encodeURIComponent(name) + '/columns')
-        .then(function (c) { self.columns = c; })
+        .then(function (res) { self.columns = (res && res.items) || []; })
         .catch(function (e) { RS.alertErr(e); })
         .finally(function () { self.columnsLoading = false; });
     },

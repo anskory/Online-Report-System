@@ -23,6 +23,12 @@ type Query struct {
 	CountCacheSec   int `yaml:"count_cache_sec"`   // 统计总数结果缓存（秒），翻页/刷新复用；0=不缓存
 }
 
+// Meta 元数据（表/字段清单）缓存配置（对应 config.yaml 的 meta 段）
+type Meta struct {
+	CacheTTLSec int `yaml:"cache_ttl_sec"` // 缓存有效期（秒）；0=关闭缓存，每次实时扫描业务库
+	TableLimit  int `yaml:"table_limit"`   // 单次返回表数量上限，超出截断并回传真实总数；0=不限制
+}
+
 // Config 系统配置（对应设计文档第 10 章 config.yaml）
 type Config struct {
 	Server struct {
@@ -39,12 +45,15 @@ type Config struct {
 		LoginLockMinutes int    `yaml:"login_lock_minutes"`
 	} `yaml:"security"`
 	Log struct {
-		Level        string `yaml:"level"`
-		SlowQueryMs  int    `yaml:"slow_query_ms"`
-		AuditDays    int    `yaml:"audit_retention_days"`
+		Level       string `yaml:"level"`
+		SlowQueryMs int    `yaml:"slow_query_ms"`
+		AuditDays   int    `yaml:"audit_retention_days"`
+		AuditSync   bool   `yaml:"audit_sync"`       // true=审计日志同步写（排障用，会影响响应耗时）
+		AuditQueue  int    `yaml:"audit_queue_size"` // 异步写入队列长度，默认 2048
 	} `yaml:"log"`
 	Export Export `yaml:"export"`
 	Query  Query  `yaml:"query"`
+	Meta   Meta   `yaml:"meta"`
 }
 
 // Load 加载配置文件，环境变量优先（JWT_SECRET / AES_KEY）
@@ -58,6 +67,7 @@ func Load(path string) (*Config, error) {
 	cfg.Security.LoginLockMinutes = 10
 	cfg.Log.Level = "info"
 	cfg.Log.AuditDays = 90
+	cfg.Log.AuditQueue = 2048
 	cfg.Export.Dir = "./data/exports"
 	cfg.Export.SyncRowLimit = 10000
 	cfg.Export.Workers = 2
@@ -65,6 +75,8 @@ func Load(path string) (*Config, error) {
 	cfg.Export.XlsxSheetMaxRow = 1000000
 	cfg.Query.CountTimeoutSec = 5
 	cfg.Query.CountCacheSec = 30
+	cfg.Meta.CacheTTLSec = 300
+	cfg.Meta.TableLimit = 3000
 
 	if path != "" {
 		data, err := os.ReadFile(path)

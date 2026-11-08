@@ -15,8 +15,11 @@
           <el-option v-for="g in groups" :key="g.id" :label="g.name" :value="g.id"></el-option>
         </el-select>
         <el-input v-model="keyword" placeholder="按名称搜索" clearable style="width:220px"></el-input>
+        <el-button v-if="can('report:create')" style="margin-left:auto" @click="openWizard">
+          <el-icon style="margin-right:3px"><i-magic-stick></i-magic-stick></el-icon>从表建报表
+        </el-button>
         <!-- 报表配置入口：不再依赖左侧菜单，统一从报表中心进（进去后可从顶栏返回） -->
-        <el-button v-if="can('report:create')" type="primary" style="margin-left:auto" @click="createReport">
+        <el-button v-if="can('report:create')" type="primary" @click="createReport">
           <el-icon style="margin-right:3px"><i-plus></i-plus></el-icon>报表配置
         </el-button>
       </div>
@@ -57,6 +60,9 @@
         </el-table>
       </div>
     </div>
+
+    <!-- 从表建报表：三步向导（选表 → 勾字段 → 预览并创建草稿） -->
+    <report-wizard ref="wizard" @created="onWizardCreated"></report-wizard>
   </div>
 </template>
 
@@ -64,9 +70,11 @@
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { RS } from '@/lib/rs.js'
 import tableFill from '@/lib/tableFill.js'
+import ReportWizard from '@/components/ReportWizard.vue'
 
 export default {
   mixins: [tableFill],
+  components: { ReportWizard },
   data: function () {
     return {
       user: RS.user(),
@@ -110,6 +118,16 @@ export default {
     view: function (r) { this.$router.push({ path: '/view', query: { id: r.id } }); },
     /** 进入报表配置（新建）：配置页顶部有「返回报表中心」 */
     createReport: function () { this.$router.push('/config').catch(function () {}); },
+    /** 打开「从表建报表」向导 */
+    openWizard: function () {
+      var w = this.$refs.wizard;
+      if (w) w.open();
+    },
+    /** 向导创建成功：刷新列表并直接进入配置页继续精调 */
+    onWizardCreated: function (id) {
+      this.load();
+      if (id) this.$router.push({ path: '/config', query: { id: id } });
+    },
     edit: function (r) { this.$router.push({ path: '/config', query: { id: r.id } }); },
     setStatus: function (r, status) {
       var self = this;

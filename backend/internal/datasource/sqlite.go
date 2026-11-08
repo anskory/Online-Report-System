@@ -84,6 +84,71 @@ func (SQLiteDriver) ListColumns(ctx context.Context, db *sql.DB, table string) (
 
 func (SQLiteDriver) QuoteIdentifier(name string) string { return QuoteSQLite(name) }
 
+// ListIndexes 索引清单：PRAGMA index_list 拿索引名/唯一性/origin，
+// 再对每个索引 PRAGMA index_info 拿列序（origin='pk' 即主键索引）。
+// 注意：先读完 index_list 再逐个查 index_info——SQLite 内存库单连接下
+// 边读结果集边发新查询容易卡住。
+func (SQLiteDriver) ListIndexes(ctx context.Context, db *sql.DB, table string) ([]IndexMeta, error) {
+	if err := ValidateIdentifier(table); err != nil {
+		return nil, err
+	}
+	type brief struct {
+		name    string
+		unique  int
+		primary bool
+	}
+	rows, err := db.QueryContext(ctx, fmt.Sprintf("PRAGMA index_list(%s)", QuoteSQLite(table)))
+	if err != nil {
+		return nil, err
+	}
+	var list []brief
+	for rows.Next() {
+		var seq, unique, partial int
+		var name, origin string
+		if err := rows.Scan(&seq, &name, &unique, &origin, &partial); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		list = append(list, brief{name: name, unique: unique, primary: origin == "pk"})
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+
+	out := []IndexMeta{}
+	for _, b := range list {
+		cols, err := sqliteIndexColumns(ctx, db, b.name)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, IndexMeta{Name: b.name, Columns: cols, Unique: b.unique == 1, Primary: b.primary})
+	}
+	return out, nil
+}
+
+// sqliteIndexColumns 读取单个索引的列（按索引内顺序）
+func sqliteIndexColumns(ctx context.Context, db *sql.DB, index string) ([]string, error) {
+	rows, err := db.QueryContext(ctx, fmt.Sprintf("PRAGMA index_info(%s)", QuoteSQLite(index)))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var cols []string
+	for rows.Next() {
+		var seqno, cid int
+		var name sql.NullString
+		if err := rows.Scan(&seqno, &cid, &name); err != nil {
+			return nil, err
+		}
+		if name.Valid {
+			cols = append(cols, name.String)
+		}
+	}
+	return cols, rows.Err()
+}
+
 func QuoteSQLite(name string) string {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
 }

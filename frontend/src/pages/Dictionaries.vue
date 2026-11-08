@@ -321,7 +321,8 @@ export default {
       if (!this.form.datasourceId) return;
       this.tablesLoading = true;
       RS.get('/api/datasources/' + this.form.datasourceId + '/tables')
-        .then(function (l) { self.tableOptions = l || []; })
+        // 后端返回 {items,total,truncated,cached,ageSec}（表清单有 TTL 缓存）
+        .then(function (res) { self.tableOptions = (res && res.items) || []; })
         .catch(function (e) {
           self.tableOptions = [];
           if (String((e && e.message) || '').indexOf('权限') >= 0) {
@@ -344,8 +345,9 @@ export default {
       if (!table || !this.form.datasourceId) return;
       if (which === 'type') this.typeColsLoading = true; else this.dataColsLoading = true;
       RS.get('/api/datasources/' + this.form.datasourceId + '/tables/' + encodeURIComponent(table) + '/columns')
-        .then(function (l) {
-          if (which === 'type') { self.typeCols = l || []; } else { self.dataCols = l || []; }
+        .then(function (res) {
+          var l = (res && res.items) || [];
+          if (which === 'type') { self.typeCols = l; } else { self.dataCols = l; }
         })
         .catch(function (e) {
           if (which === 'type') { self.typeCols = []; } else { self.dataCols = []; }

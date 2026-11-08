@@ -141,6 +141,29 @@ func (SQLServerDriver) QuoteIdentifier(name string) string {
 	return "[" + strings.ReplaceAll(name, "]", "]]") + "]"
 }
 
+// ListIndexes 索引清单：sys.indexes + sys.index_columns，排除包含列（is_included_column），
+// 只保留键列，并用 key_ordinal 还原索引内的列顺序
+func (SQLServerDriver) ListIndexes(ctx context.Context, db *sql.DB, table string) ([]IndexMeta, error) {
+	if err := ValidateTableRef(table); err != nil {
+		return nil, err
+	}
+	full := strings.TrimSpace(table) // OBJECT_ID 需要全限定名才能命中跨模式表
+	q := `SELECT i.name, c.name,
+       CASE WHEN i.is_unique = 1 THEN 0 ELSE 1 END AS non_unique,
+       CASE WHEN i.is_primary_key = 1 THEN 1 ELSE 0 END AS is_primary
+FROM sys.indexes i
+JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+WHERE i.object_id = OBJECT_ID(?) AND ic.is_included_column = 0 AND i.name IS NOT NULL
+ORDER BY i.name, ic.key_ordinal`
+	rows, err := db.QueryContext(ctx, q, full)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanIndexRows(rows)
+}
+
 // Rebind :name → @p1..@pn（跳过字符串字面量）
 func (SQLServerDriver) Rebind(query string) string {
 	i := 0

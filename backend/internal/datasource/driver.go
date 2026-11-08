@@ -309,6 +309,60 @@ func CommentsFor(ctx context.Context, d Driver, db *sql.DB, cols []string) map[s
 	return m
 }
 
+// IndexMeta 索引元数据（表结构浏览 / 慢查询排查用）
+type IndexMeta struct {
+	Name    string   `json:"name"`    // 索引名
+	Columns []string `json:"columns"` // 索引列（按索引内顺序）
+	Unique  bool     `json:"unique"`  // 是否唯一索引
+	Primary bool     `json:"primary"` // 是否主键索引
+}
+
+// IndexProvider 驱动可选实现：查询指定表的索引清单。
+// 未实现的驱动由上层回退为「该数据库不支持索引浏览」，而不是报错。
+type IndexProvider interface {
+	ListIndexes(ctx context.Context, db *sql.DB, table string) ([]IndexMeta, error)
+}
+
+// SupportsIndexes 驱动是否支持索引浏览（前端据此决定是否显示入口）
+func SupportsIndexes(d Driver) bool {
+	_, ok := d.(IndexProvider)
+	return ok
+}
+
+// IndexesFor 查询索引清单；驱动未实现时返回空切片（nil 语义交给调用方判断）
+func IndexesFor(ctx context.Context, d Driver, db *sql.DB, table string) ([]IndexMeta, error) {
+	p, ok := d.(IndexProvider)
+	if !ok {
+		return nil, fmt.Errorf("当前数据库类型不支持索引浏览")
+	}
+	return p.ListIndexes(ctx, db, table)
+}
+
+// scanIndexRows 通用索引结果集聚合：按索引名分组、按查询顺序追加列。
+// 结果集约定四列：index_name, column_name, non_unique(0/1), is_primary(0/1)。
+// 各库的 SQL 自行把「唯一/主键」翻译成这两个 0/1 标志，Go 侧只做分组，避免分支扩散。
+func scanIndexRows(rows *sql.Rows) ([]IndexMeta, error) {
+	out := []IndexMeta{}
+	idx := map[string]int{}
+	for rows.Next() {
+		var name, col string
+		var nonUnique, isPrimary int
+		if err := rows.Scan(&name, &col, &nonUnique, &isPrimary); err != nil {
+			return nil, err
+		}
+		i, ok := idx[name]
+		if !ok {
+			out = append(out, IndexMeta{Name: name, Unique: nonUnique == 0, Primary: isPrimary == 1})
+			i = len(out) - 1
+			idx[name] = i
+		}
+		if col != "" {
+			out[i].Columns = append(out[i].Columns, col)
+		}
+	}
+	return out, rows.Err()
+}
+
 // ---------- 注册表 ----------
 
 var registry = map[string]Driver{}

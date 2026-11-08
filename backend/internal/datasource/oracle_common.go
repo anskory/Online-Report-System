@@ -1,9 +1,12 @@
 package datasource
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 // 本文件放 Oracle 驱动的两个实现共享的常量/工具，无 build tag，
@@ -48,4 +51,60 @@ func OraclePaginate(version string, query string, offset, limit int) string {
 		return PaginateRownum(query, offset, limit)
 	}
 	return fmt.Sprintf("%s OFFSET %d ROWS FETCH NEXT %d ROWS ONLY", query, offset, limit)
+}
+
+// oracleListIndexes Oracle 索引清单（两个驱动共用一份 SQL）：
+// 绑定位次 :1=owner（空串表示当前用户）、:2=表名。
+// 主键索引用 all_constraints 反查，比按索引名猜（PK_xxx / SYS_Cxxx）可靠。
+func oracleListIndexes(ctx context.Context, db *sql.DB, table string) ([]IndexMeta, error) {
+	table = strings.ToUpper(strings.TrimSpace(table))
+	owner := ""
+	if i := strings.Index(table, "."); i >= 0 {
+		owner, table = table[:i], table[i+1:]
+	}
+	for _, s := range []string{owner, table} {
+		if s == "" {
+			continue
+		}
+		if err := ValidateIdentifier(s); err != nil {
+			return nil, err
+		}
+	}
+	const q = `SELECT i.index_name, c.column_name,
+       CASE WHEN i.uniqueness = 'UNIQUE' THEN 0 ELSE 1 END AS non_unique,
+       CASE WHEN EXISTS (
+              SELECT 1 FROM all_constraints k
+               WHERE k.owner = i.table_owner AND k.table_name = i.table_name
+                 AND k.constraint_type = 'P' AND k.index_name = i.index_name
+            ) THEN 1 ELSE 0 END AS is_primary
+FROM all_indexes i
+JOIN all_ind_columns c ON c.index_owner = i.owner AND c.index_name = i.index_name
+WHERE i.table_owner = COALESCE(NULLIF(:1, ''), USER) AND i.table_name = :2
+ORDER BY i.index_name, c.column_position`
+	rows, err := db.QueryContext(ctx, q, owner, table)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []IndexMeta{}
+	idx := map[string]int{}
+	for rows.Next() {
+		var name string
+		var col sql.NullString
+		var nonUnique, isPrimary int
+		if err := rows.Scan(&name, &col, &nonUnique, &isPrimary); err != nil {
+			return nil, err
+		}
+		i, ok := idx[name]
+		if !ok {
+			out = append(out, IndexMeta{Name: name, Unique: nonUnique == 0, Primary: isPrimary == 1})
+			i = len(out) - 1
+			idx[name] = i
+		}
+		// 函数索引的 column_name 为 NULL，跳过不追加空列
+		if col.Valid && col.String != "" {
+			out[i].Columns = append(out[i].Columns, col.String)
+		}
+	}
+	return out, rows.Err()
 }

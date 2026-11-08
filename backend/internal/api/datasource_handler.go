@@ -93,7 +93,8 @@ func (h *DatasourceHandler) TestByID(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, 2001, "ID 非法")
 		return
 	}
-	latency, version, err := h.svc.Test(c.Request.Context(), id)
+	_, username := CurrentUser(c)
+	latency, version, err := h.svc.Test(c.Request.Context(), id, username)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, 4001, err.Error())
 		return
@@ -108,7 +109,8 @@ func (h *DatasourceHandler) TestInput(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, 2001, "参数校验失败: "+err.Error())
 		return
 	}
-	latency, version, err := h.svc.TestInput(c.Request.Context(), in)
+	_, username := CurrentUser(c)
+	latency, version, err := h.svc.TestInput(c.Request.Context(), in, username)
 	if err != nil {
 		resp.Err(c, http.StatusInternalServerError, 4001, err.Error())
 		return

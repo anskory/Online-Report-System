@@ -2,8 +2,10 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/ce/report-system/backend/internal/pkg/resp"
 	"github.com/ce/report-system/backend/internal/service"
@@ -70,17 +72,44 @@ func (h *QueryHandler) Query(c *gin.Context) {
 	}
 	var body queryBody
 	_ = c.ShouldBindJSON(&body) // 允许空 body（全部走默认值）
+	start := time.Now()
 	result, err := h.engine.Execute(c.Request.Context(), id, body.Params, body.Page, body.PageSize, body.SortCol, body.SortDir)
+	cost := int(time.Since(start).Milliseconds())
+
+	// 成功与失败都留痕：查询失败（SQL 报错、超时、条件非法）恰恰是最需要复盘的时刻，
+	// 只记成功等于把最有价值的日志丢掉了。Target 存报表名快照，报表改名后仍能对上。
+	e := NewAuditEntry(c, "query", "report")
+	e.ReportID = &id
+	e.Target = h.reports.Name(id)
+	e.CostMs = cost
 	if err != nil {
+		e.Success = service.BoolPtr(false)
+		e.ErrMsg = clipText(err.Error(), 240)
+		e.Detail = fmt.Sprintf("报表查询失败（第 %d 页）", pageOrDefault(body.Page))
+		h.audit.LogAsync(e)
 		mapEngineError(c, err)
 		return
 	}
-	uid, username := CurrentUser(c)
-	h.audit.LogAsync(service.AuditEntry{
-		LogType: "query", UserID: uid, Username: username, ClientIP: c.ClientIP(),
-		ReportID: &id, Detail: "报表查询",
-	})
+	e.Detail = fmt.Sprintf("报表查询 第 %d 页 / 每页 %d 行", result.Page, result.PageSize)
+	h.audit.LogAsync(e)
 	resp.OK(c, result)
+}
+
+func pageOrDefault(p int) int {
+	if p <= 0 {
+		return 1
+	}
+	return p
+}
+
+// clipText 按「字符」截断长文本（错误信息常带中文与 SQL 片段），
+// 避免超出 audit_log 字段长度导致整条日志写入失败。
+func clipText(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max]) + "…"
 }
 
 // Options POST /api/reports/:id/options 执行条件项的选项 SQL

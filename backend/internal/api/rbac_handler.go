@@ -3,8 +3,10 @@ package api
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
+	"github.com/ce/report-system/backend/internal/model"
 	"github.com/ce/report-system/backend/internal/pkg/resp"
 	"github.com/ce/report-system/backend/internal/service"
 	"github.com/gin-gonic/gin"
@@ -21,12 +23,84 @@ func NewRBACHandler(auth *service.AuthService, rbac *service.RBACService, audit 
 	return &RBACHandler{auth: auth, rbac: rbac, audit: audit}
 }
 
-// log 记录权限变更审计
-func (h *RBACHandler) log(c *gin.Context, detail string) {
-	uid, uname := CurrentUser(c)
-	h.audit.LogAsync(service.AuditEntry{
-		LogType: "config_change", UserID: uid, Username: uname, ClientIP: c.ClientIP(), Detail: detail,
-	})
+// log 记录权限变更审计：统一补 Module 与 Target（名称快照）。
+// 以前只写 Detail，日志页「模块 / 目标」两列全空，模块筛选对用户与角色管理完全失效，
+// 且删除用户/角色后日志里只剩 #ID，事后无法判断当时动的是谁。
+func (h *RBACHandler) log(c *gin.Context, module, target, detail string) {
+	e := NewAuditEntry(c, "config_change", module)
+	e.Target = target
+	e.Detail = detail
+	h.audit.LogAsync(e)
+}
+
+// userLabel 用户日志快照：显示名（用户名）；都为空时退回 #ID。
+// 取不到不阻断主流程——审计日志不该让正常的增删改失败。
+func (h *RBACHandler) userLabel(id int64) string {
+	u, err := h.auth.GetUser(id)
+	if err != nil || u == nil {
+		return "#" + strconv.FormatInt(id, 10)
+	}
+	return userLabelOf(u)
+}
+
+// userLabelOf 从已取到的用户对象生成标签（避免重复查库）
+func userLabelOf(u *model.User) string {
+	if u == nil {
+		return ""
+	}
+	name := strings.TrimSpace(u.DisplayName)
+	if name == "" {
+		return u.Username
+	}
+	if u.Username == "" || name == u.Username {
+		return name
+	}
+	return name + "（" + u.Username + "）"
+}
+
+// roleLabel 角色日志快照：角色名（角色标识），例如「只读用户（viewer）」
+func (h *RBACHandler) roleLabel(id int64) string {
+	r, err := h.rbac.RoleByID(id)
+	if err != nil || r == nil {
+		return "#" + strconv.FormatInt(id, 10)
+	}
+	return roleLabelOf(r)
+}
+
+// roleLabelOf 从已取到的角色对象生成标签
+func roleLabelOf(r *model.Role) string {
+	if r == nil {
+		return ""
+	}
+	if r.RoleName != "" && r.RoleName != r.RoleKey {
+		return r.RoleName + "（" + r.RoleKey + "）"
+	}
+	return r.RoleKey
+}
+
+// menuLabel 菜单日志快照：按 ID 在菜单树里找名字；找不到退回 #ID。
+// 菜单没有「按 ID 取单条」的现成方法，这里遍历一次全量树（菜单量级很小）。
+func (h *RBACHandler) menuLabel(id int64) string {
+	tree, err := h.rbac.MenuTree()
+	if err != nil {
+		return "#" + strconv.FormatInt(id, 10)
+	}
+	var find func(nodes []*service.MenuNode) string
+	find = func(nodes []*service.MenuNode) string {
+		for _, n := range nodes {
+			if n.ID == id {
+				return n.MenuName
+			}
+			if s := find(n.Children); s != "" {
+				return s
+			}
+		}
+		return ""
+	}
+	if name := find(tree); name != "" {
+		return name
+	}
+	return "#" + strconv.FormatInt(id, 10)
 }
 
 // fail 统一错误映射
@@ -79,7 +153,7 @@ func (h *RBACHandler) CreateUser(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	h.log(c, "新建用户 "+u.Username)
+	h.log(c, "user", u.Username, "新建用户 "+u.Username)
 	resp.OK(c, gin.H{"id": u.ID})
 }
 
@@ -120,7 +194,8 @@ func (h *RBACHandler) UpdateUser(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	h.log(c, "修改用户 #"+c.Param("id"))
+	label := userLabelOf(target)
+	h.log(c, "user", label, "修改用户 "+label+"（状态 "+strconv.Itoa(status)+"）")
 	resp.OK(c, nil)
 }
 
@@ -139,11 +214,13 @@ func (h *RBACHandler) DeleteUser(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, 2002, "这是最后一个启用的管理员，不能删除")
 		return
 	}
+	// 先取名字：用户删除后日志里只剩 #ID，事后无法判断删的是谁
+	label := h.userLabel(id)
 	if err := h.auth.DeleteUser(id); err != nil {
 		fail(c, err)
 		return
 	}
-	h.log(c, "删除用户 #"+c.Param("id"))
+	h.log(c, "user", label, "删除用户 "+label)
 	resp.OK(c, nil)
 }
 
@@ -160,11 +237,12 @@ func (h *RBACHandler) ResetPassword(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, 2001, "密码不能为空")
 		return
 	}
+	label := h.userLabel(id)
 	if err := h.auth.ResetPassword(id, req.Password); err != nil {
 		fail(c, err)
 		return
 	}
-	h.log(c, "重置用户 #"+c.Param("id")+" 密码")
+	h.log(c, "user", label, "重置用户 "+label+" 的密码")
 	resp.OK(c, nil)
 }
 
@@ -191,11 +269,12 @@ func (h *RBACHandler) SetUserRoles(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, 2002, "这是最后一个启用的管理员，不能移除其管理员角色")
 		return
 	}
+	label := h.userLabel(id)
 	if err := h.rbac.SetUserRoles(id, req.RoleKeys); err != nil {
 		fail(c, err)
 		return
 	}
-	h.log(c, "调整用户 #"+c.Param("id")+" 角色为 "+strings.Join(req.RoleKeys, ","))
+	h.log(c, "user", label, "调整用户 "+label+" 的角色为 "+strings.Join(req.RoleKeys, ","))
 	resp.OK(c, nil)
 }
 
@@ -223,7 +302,7 @@ func (h *RBACHandler) CreateRole(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	h.log(c, "新建角色 "+r.RoleKey)
+	h.log(c, "role", roleLabelOf(r), "新建角色 "+roleLabelOf(r))
 	resp.OK(c, r)
 }
 
@@ -242,7 +321,8 @@ func (h *RBACHandler) UpdateRole(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	h.log(c, "修改角色 #"+c.Param("id"))
+	label := h.roleLabel(id)
+	h.log(c, "role", label, "修改角色 "+label)
 	resp.OK(c, nil)
 }
 
@@ -252,11 +332,13 @@ func (h *RBACHandler) DeleteRole(c *gin.Context) {
 	if !ok {
 		return
 	}
+	// 先取名字：角色删除后日志里只剩 #ID
+	label := h.roleLabel(id)
 	if err := h.rbac.DeleteRole(id); err != nil {
 		fail(c, err)
 		return
 	}
-	h.log(c, "删除角色 #"+c.Param("id"))
+	h.log(c, "role", label, "删除角色 "+label)
 	resp.OK(c, nil)
 }
 
@@ -296,7 +378,7 @@ func (h *RBACHandler) SetRoleMenus(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	h.log(c, "调整角色 "+role.RoleKey+" 的菜单权限")
+	h.log(c, "role", roleLabelOf(role), "调整角色 "+roleLabelOf(role)+" 的菜单权限")
 	resp.OK(c, nil)
 }
 
@@ -336,7 +418,7 @@ func (h *RBACHandler) SetRoleReports(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	h.log(c, "调整角色 "+role.RoleKey+" 的报表授权")
+	h.log(c, "role", roleLabelOf(role), "调整角色 "+roleLabelOf(role)+" 的报表授权")
 	resp.OK(c, nil)
 }
 
@@ -369,7 +451,7 @@ func (h *RBACHandler) CreateMenu(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	h.log(c, "新建菜单 "+m.MenuName)
+	h.log(c, "menu", m.MenuName, "新建菜单 "+m.MenuName)
 	resp.OK(c, m)
 }
 
@@ -384,11 +466,12 @@ func (h *RBACHandler) UpdateMenu(c *gin.Context) {
 		resp.Err(c, http.StatusBadRequest, 2001, "参数校验失败")
 		return
 	}
+	label := h.menuLabel(id)
 	if err := h.rbac.UpdateMenu(id, &in); err != nil {
 		fail(c, err)
 		return
 	}
-	h.log(c, "修改菜单 #"+c.Param("id"))
+	h.log(c, "menu", label, "修改菜单 "+label)
 	resp.OK(c, nil)
 }
 
@@ -398,10 +481,12 @@ func (h *RBACHandler) DeleteMenu(c *gin.Context) {
 	if !ok {
 		return
 	}
+	// 先取名字：菜单删除后日志里只剩 #ID
+	label := h.menuLabel(id)
 	if err := h.rbac.DeleteMenu(id); err != nil {
 		fail(c, err)
 		return
 	}
-	h.log(c, "删除菜单 #"+c.Param("id"))
+	h.log(c, "menu", label, "删除菜单 "+label)
 	resp.OK(c, nil)
 }

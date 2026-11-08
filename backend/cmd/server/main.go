@@ -50,7 +50,13 @@ func main() {
 	}
 
 	// ---------- 服务装配 ----------
-	auditSvc := service.NewAuditService(db)
+	auditSvc := service.NewAuditService(db, service.AuditConfig{
+		QueueSize: cfg.Log.AuditQueue,
+		Sync:      cfg.Log.AuditSync,
+	})
+	auditSvc.Start()                                       // 异步批量落库（队列 2048，200 条或 1 秒 flush）
+	auditSvc.StartCleanup(cfg.Log.AuditDays)               // 保留期自动清理（默认 90 天，每 6 小时）
+	defer auditSvc.Close()                                 // 退出前 flush 队列中剩余日志
 	rbacSvc := service.NewRBACService(db)
 	authSvc := service.NewAuthService(db, cfg.Security.JWTSecret, cfg.Security.LoginMaxFail, cfg.Security.LoginLockMinutes, auditSvc, rbacSvc)
 
@@ -78,17 +84,20 @@ func main() {
 
 	mgr := datasource.NewManager()
 	dsSvc := service.NewDatasourceService(db, crypto.DeriveKey(cfg.Security.AESKey), mgr, auditSvc)
-	metaSvc := service.NewMetaService(dsSvc)
+	metaSvc := service.NewMetaService(dsSvc, cfg.Meta.CacheTTLSec, cfg.Meta.TableLimit)
+	// 数据源配置变更 / 删除 / 连接测试成功后，清掉该数据源的元数据缓存
+	dsSvc.OnChange(metaSvc.Invalidate)
 	reportSvc := service.NewReportService(db, auditSvc)
 	dictSvc := service.NewDictService(db)
 	queryEngine := service.NewQueryEngine(dsSvc, reportSvc, dictSvc, cfg.Query)
 	exportSvc := service.NewExportService(db, queryEngine, cfg.Export)
 	colCfgSvc := service.NewColumnConfigService(db)
+	wizardSvc := service.NewWizardService(metaSvc)
 	exportSvc.StartWorkers()   // 异步导出 Worker（数量可配，默认 2）
 	exportSvc.StartCleanup()   // 过期导出文件清理（每 6 小时，默认保留 7 天）
 
 	gin.SetMode(gin.ReleaseMode)
-	router := api.NewRouter(authSvc, rbacSvc, dsSvc, metaSvc, reportSvc, queryEngine, auditSvc, exportSvc, dictSvc, colCfgSvc, cfg.Security.JWTSecret)
+	router := api.NewRouter(authSvc, rbacSvc, dsSvc, metaSvc, reportSvc, queryEngine, auditSvc, exportSvc, dictSvc, colCfgSvc, wizardSvc, cfg.Security.JWTSecret)
 
 	// ---------- 前端页面与静态资源（Vite 构建产物，go:embed 嵌入）----------
 	// 对外地址为干净路径（/login、/reports、/view?id=1），不带 /ui 前缀也不再带 .html；

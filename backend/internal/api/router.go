@@ -17,10 +17,13 @@ func NewRouter(
 	exp *service.ExportService,
 	dict *service.DictService,
 	colCfg *service.ColumnConfigService,
+	wizard *service.WizardService,
 	jwtSecret string,
 ) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
+	// 为每个请求生成 TraceID 并记录 UA（审计日志里可串联同一次请求）
+	r.Use(RequestMeta())
 
 	authHandler := NewAuthHandler(auth, rbac)
 	rbacHandler := NewRBACHandler(auth, rbac, audit)
@@ -30,12 +33,18 @@ func NewRouter(
 	queryHandler := NewQueryHandler(engine, reports, audit)
 	publicHandler := NewPublicHandler(engine, reports, exp, audit, colCfg)
 	exportHandler := NewExportHandler(exp, reports, audit)
-	dictHandler := NewDictHandler(dict, ds)
+	dictHandler := NewDictHandler(dict, ds, audit)
 	colCfgHandler := NewColumnConfigHandler(colCfg)
+	auditHandler := NewAuditHandler(audit)
+	wizardHandler := NewWizardHandler(wizard)
 
 	// 健康检查
 	r.GET("/api/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"code": 0, "msg": "ok", "data": gin.H{"status": "up"}})
+		c.JSON(200, gin.H{"code": 0, "msg": "ok", "data": gin.H{
+			"status": "up",
+			// 队列满被丢弃的审计日志条数：持续增长说明日志压力超出队列处理能力
+			"auditDropped": audit.Dropped(),
+		}})
 	})
 
 	// 认证（公开）
@@ -94,6 +103,9 @@ func NewRouter(
 	api.POST("/datasources/test", RequirePerm("datasource:test"), dsHandler.TestInput)
 	api.GET("/datasources/:id/tables", RequirePerm("datasource:list"), metaHandler.Tables)
 	api.GET("/datasources/:id/tables/:name/columns", RequirePerm("datasource:list"), metaHandler.Columns)
+	api.GET("/datasources/:id/tables/:name/indexes", RequirePerm("datasource:list"), metaHandler.Indexes)
+	// 手动清空元数据缓存（DDL 后不必等 TTL；也可在配置页点「刷新表清单」）
+	api.POST("/datasources/:id/meta/clear", RequirePerm("datasource:update"), metaHandler.ClearCache)
 
 	// ---------- 报表配置 ----------
 	api.POST("/report-groups", RequirePerm("report:update"), reportHandler.CreateGroup)
@@ -105,6 +117,9 @@ func NewRouter(
 	api.POST("/reports/:id/public", RequirePerm("report:public"), reportHandler.EnablePublic)
 	api.PUT("/reports/:id/public", RequirePerm("report:public"), reportHandler.SetPublicExport)
 	api.DELETE("/reports/:id/public", RequirePerm("report:public"), reportHandler.DisablePublic)
+
+	// 基于表生成报表草稿（只生成不落库，保存仍走 POST /reports）
+	api.POST("/report-wizard/generate", RequirePerm("report:create"), wizardHandler.Generate)
 
 	// ---------- 数据字典 ----------
 	api.GET("/dictionaries", RequirePerm("dict:list"), dictHandler.List)
@@ -138,6 +153,12 @@ func NewRouter(
 	api.POST("/system/menus", RequirePerm("system:menu:create"), rbacHandler.CreateMenu)
 	api.PUT("/system/menus/:id", RequirePerm("system:menu:update"), rbacHandler.UpdateMenu)
 	api.DELETE("/system/menus/:id", RequirePerm("system:menu:delete"), rbacHandler.DeleteMenu)
+
+	// ---------- 系统管理：操作日志 ----------
+	api.GET("/system/audit-logs", RequirePerm("system:audit:list"), auditHandler.List)
+	api.GET("/system/audit-logs/stats", RequirePerm("system:audit:list"), auditHandler.Stats)
+	api.GET("/system/audit-logs/export", RequirePerm("system:audit:export"), auditHandler.Export)
+	api.DELETE("/system/audit-logs", RequirePerm("system:audit:delete"), auditHandler.Clean)
 
 	return r
 }
