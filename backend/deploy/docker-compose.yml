@@ -1,0 +1,19 @@
+services:
+  report-system:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        WITH_ORACLE: "0"          # 需要 Oracle 时改为 1，并按 Dockerfile 说明预置 Instant Client
+    image: report-system:latest
+    container_name: report-system
+    restart: unless-stopped
+    ports:
+      - "18080:18080"
+    volumes:
+      - ./data:/app/data          # SQLite 系统库与导出文件持久化
+      - ./config.yaml:/app/config.yaml:ro
+    environment:
+      # 敏感项建议用环境变量覆盖 config.yaml（生产必须更换）
+      - JWT_SECRET=please-change-me
+      - AES_KEY=please-change-me-32bytes

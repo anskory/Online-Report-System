@@ -1,0 +1,2 @@
+占位文件：保证 go:embed all:dist 在未执行前端构建时也能编译通过。
+构建前端（npm run build）后本目录会被 js/css 产物覆盖。

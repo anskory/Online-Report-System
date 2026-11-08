@@ -1,0 +1,520 @@
+/* ============================================================
+   在线报表系统 - 全局样式
+   设计令牌：:root（亮色）/ html.dark（暗色），由 lib/theme.js 切换；
+   Element Plus 变量（--el-*）随根节点 dark class 自动切换（dark/css-vars.css）。
+   自定义组件一律使用 --rs-* 令牌，不再写死颜色。
+   ============================================================ */
+
+/* ---------- 设计令牌 ---------- */
+:root {
+  /* 主色：科技蓝（与 Logo 同源） */
+  --rs-accent: #2f6fe0;
+  --rs-accent-2: #5aa8ff;
+  --rs-accent-soft: rgba(47, 111, 224, .1);
+  --rs-grad: linear-gradient(135deg, var(--rs-accent-2), var(--rs-accent));
+  /* 中性色 */
+  --rs-bg: #f3f5f9;
+  --rs-surface: #ffffff;
+  --rs-surface-2: #f8fafd;
+  --rs-text: #1b2537;
+  --rs-text-2: #5b6577;
+  --rs-muted: #98a2b3;
+  --rs-border: #e7eaf1;
+  --rs-radius: 12px;
+  --rs-shadow: 0 1px 2px rgba(16, 29, 51, .04), 0 10px 30px rgba(16, 29, 51, .07);
+  /* 侧边栏（深蓝渐变，明暗两版微调） */
+  --rs-sidebar-grad: linear-gradient(180deg, #101c30 0%, #15253c 100%);
+  --rs-sidebar-text: #b7c5da;
+  --rs-sidebar-border: rgba(255, 255, 255, .07);
+  --rs-sidebar-hover: rgba(255, 255, 255, .08);
+  --rs-sidebar-sub: rgba(0, 0, 0, .22);
+  /* Element Plus 主色对齐：把默认蓝 #409eff 换成品牌蓝 #2f6fe0 */
+  --el-color-primary: #2f6fe0;
+  --el-color-primary-light-3: #6191e8;
+  --el-color-primary-light-5: #97b6f0;
+  --el-color-primary-light-7: #c4d7f6;
+  --el-color-primary-light-8: #d9e4f9;
+  --el-color-primary-light-9: #ecf1fc;
+  --el-color-primary-dark-2: #2559b3;
+}
+
+/* ---------- 暗色令牌 ---------- */
+html.dark {
+  --rs-bg: #0c1220;
+  --rs-surface: #141d2f;
+  --rs-surface-2: #1a2540;
+  --rs-text: #e8edf6;
+  --rs-text-2: #a3b1c9;
+  --rs-muted: #6c7a94;
+  --rs-border: #25324b;
+  --rs-accent-soft: rgba(90, 168, 255, .14);
+  --rs-shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px rgba(0, 0, 0, .35);
+  --rs-sidebar-grad: linear-gradient(180deg, #0a101d 0%, #0f1a2c 100%);
+  --rs-sidebar-sub: rgba(0, 0, 0, .35);
+  /* 暗色下主色提亮一档，保证按钮/链接可读 */
+  --el-color-primary: #5aa8ff;
+  --el-color-primary-light-3: #3f7fd9;
+  --el-color-primary-dark-2: #7db8ff;
+}
+
+/* ---------- 基础 ---------- */
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--rs-bg); color: var(--rs-text);
+  transition: background-color .2s ease, color .2s ease;
+}
+
+/* 挂载点：改成 .vue 组件后页面根元素由组件提供，这里保证 100% 高度可继续向下传递（登录页居中依赖它） */
+#app { height: 100%; }
+
+/* 卡片统一：大圆角 + 柔和投影（el-card 暗色背景由 Element 变量接管） */
+.el-card {
+  border-radius: var(--rs-radius);
+  border-color: var(--rs-border);
+  box-shadow: var(--rs-shadow) !important;
+}
+
+/* ---------- 公开分享页页头（Public.vue 复用） ---------- */
+.page-header {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--rs-surface); color: var(--rs-text);
+  border-bottom: 1px solid var(--rs-border);
+  padding: 0 20px; height: 52px;
+}
+.page-header .brand { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; letter-spacing: .5px; cursor: pointer; }
+.page-header .brand img { width: 26px; height: 26px; border-radius: 6px; }
+.page-header .right { display: flex; align-items: center; gap: 14px; color: var(--rs-text-2); font-size: 13px; }
+.page-header a { color: var(--rs-text-2); text-decoration: none; }
+.page-header a:hover { color: var(--rs-accent); }
+
+.page-body { padding: 16px 20px; }
+
+/* 查询条件卡片：紧凑布局（控件用 small 尺寸，见页面内 el-form size="small"） */
+.query-card { margin-bottom: 12px; }
+.query-card .el-card__body { padding: 10px 14px 0; }
+.query-card .el-form-item { margin-bottom: 8px; margin-right: 14px; }
+.query-card .el-form-item__label { padding-right: 6px; }
+
+.toolbar { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+
+/* ---------- 页面标题区（报表中心等） ---------- */
+.page-head h3 { margin: 0 0 2px; font-size: 18px; font-weight: 700; }
+.page-head .desc { color: var(--rs-muted); font-size: 12.5px; margin-bottom: 10px; }
+
+/* ============================================================
+   登录页（Login.vue）：左右分屏
+   左侧深蓝渐变品牌区（窄屏隐藏），右侧登录卡片
+   ============================================================ */
+.login-wrap { height: 100%; display: flex; background: var(--rs-bg); }
+.login-hero {
+  flex: 1.15; position: relative; overflow: hidden;
+  display: flex; flex-direction: column; justify-content: center; padding: 0 8%;
+  background: linear-gradient(150deg, #16273e 0%, #1d3a63 55%, #2f6fe0 130%);
+  color: #fff;
+}
+.login-hero::before, .login-hero::after {
+  content: ''; position: absolute; border-radius: 50%; background: rgba(255, 255, 255, .05);
+}
+.login-hero::before { width: 480px; height: 480px; right: -140px; top: -160px; }
+.login-hero::after { width: 320px; height: 320px; left: -120px; bottom: -120px; }
+.login-glow {
+  position: absolute; width: 560px; height: 560px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(90, 168, 255, .28), transparent 65%);
+  right: -80px; bottom: -220px; filter: blur(10px); pointer-events: none;
+}
+.login-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 44px; }
+.login-brand img { width: 42px; height: 42px; border-radius: 10px; box-shadow: 0 6px 18px rgba(0, 0, 0, .3); }
+.login-brand b { font-size: 19px; letter-spacing: 1px; }
+.login-hero h1 { font-size: 34px; margin: 0 0 14px; line-height: 1.35; letter-spacing: 1px; }
+.login-hero h1 em {
+  font-style: normal;
+  background: linear-gradient(90deg, #7db8ff, #b7dcff);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.login-hero p { color: #b9c8de; font-size: 15px; max-width: 420px; margin: 0 0 36px; }
+.login-feats { display: flex; flex-direction: column; gap: 13px; font-size: 13.5px; color: #d5e1f2; position: relative; }
+.login-feats span { display: flex; align-items: center; gap: 9px; }
+.login-feats i {
+  flex: none; width: 20px; height: 20px; border-radius: 6px; font-style: normal;
+  background: rgba(255, 255, 255, .14); display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+}
+.login-side { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.login-card {
+  width: 380px; padding: 40px 38px 28px;
+  background: var(--rs-surface); border: 1px solid var(--rs-border);
+  border-radius: 18px; box-shadow: var(--rs-shadow);
+}
+.login-card h2 { margin: 0 0 4px; font-size: 22px; }
+.login-card .sub { color: var(--rs-muted); font-size: 13px; margin-bottom: 22px; }
+.login-logo { display: block; width: 54px; height: 54px; margin: 0 auto 16px; border-radius: 12px; }
+@media (max-width: 900px) {
+  .login-hero { display: none; }
+  .login-card { box-shadow: none; border-color: transparent; background: transparent; padding: 24px 8px; }
+}
+
+.table-footer { display: flex; justify-content: flex-end; align-items: center; margin-top: 12px; }
+
+/* 表格右上角副功能区（刷新/列配置/隐藏搜索/导出） */
+.table-toolbar { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 10px; }
+
+/* 结果表格包裹层：v-loading 遮罩只覆盖这一块（position 显式给出，避免遮罩闪到别处），
+   空表时也保留一点高度，遮罩不会塌成一条线 */
+.table-wrap { position: relative; min-height: 160px; }
+.table-wrap .el-loading-mask { border-radius: 4px; }
+
+/* 表头单行省略：宽表时表头不换行，避免行高参差 */
+.th-ellipsis {
+  display: inline-block; max-width: 100%; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom;
+}
+
+/* ============================================================
+   数据表格：单元格单行 + 表格撑满内容区（滚动发生在表格内部）
+   ============================================================ */
+
+/* 表头与单元格统一单行：长文本省略而不是换行把行高撑开。
+   单元格用 .cell 覆盖（Element Plus 默认 white-space:normal）；
+   表头同样单行，省略交给 .th-ellipsis / .cell 的自身省略。 */
+.el-table .cell { white-space: nowrap; }
+/* Element Plus 默认给 .cell 加了 overflow-wrap:break-word，单行场景下改回不拆词 */
+.el-table .cell { overflow-wrap: normal; word-break: keep-all; }
+
+/* 可排序表头：排序箭头改为绝对定位到右侧，长标题省略时不会把箭头挤出可视区 */
+.el-table th.el-table__cell.is-sortable > .cell { position: relative; padding-right: 30px; }
+.el-table th.el-table__cell.is-sortable .caret-wrapper { position: absolute; right: 8px; top: 50%; margin-top: -7px; }
+
+/* 撑满内容区的页面骨架：.rs-page-fill（外层） > .page-body（内层，纵向 flex）
+   页面本身不滚动，剩余高度全部给 .table-wrap；表格设置 :height 后自行内部滚动，
+   表头与分页始终可见。 */
+.rs-page-fill { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; }
+.rs-page-fill > .page-body {
+  display: flex; flex-direction: column; flex: 1 1 auto;
+  min-width: 0; min-height: 0; overflow: hidden; box-sizing: border-box;
+}
+/* 除表格外都不参与伸缩，避免被挤压变形 */
+.rs-page-fill .page-body > * { flex: 0 0 auto; }
+/* 公开页的页头同样固定高度（框架页由 AppLayout 提供，不会命中这条） */
+.rs-page-fill > .page-header { flex: 0 0 52px; }
+/* 表格容器吃掉剩余高度；min-height 给出下限，窗口极矮时至少还能看到两三行 */
+.rs-page-fill .page-body > .table-wrap { flex: 1 1 0; min-height: 120px; overflow: hidden; }
+
+.mono { font-family: Consolas, Monaco, monospace; }
+.muted { color: var(--rs-muted); font-size: 12px; }
+
+/* ============================================================
+   过渡动画：全局统一节奏（0.2s 上下），只动 background/border/透明度，
+   不动宽度高度，避免布局抖动。
+   ============================================================ */
+
+/* 明暗切换：主要容器色彩平滑过渡，不再瞬间跳变
+   （.rs-aside 单列：它还承担折叠时的宽度动画，不能被这里的简写覆盖） */
+body, .rs-topbar, .el-card, .cfg-header, .cfg-nav,
+.sql-editor, .sql-bar, .sql-gutter, .sql-tip, .cfg-picker, .cfg-picker-bar,
+.cfg-sql-preview, .cols-list, .cols-detail, .login-card, .page-header {
+  transition: background-color .25s ease, border-color .25s ease, box-shadow .25s ease;
+}
+.rs-aside { transition: flex-basis .2s ease, width .2s ease, background-color .25s ease; }
+
+/* 菜单项：折叠/展开时边距与圆角、hover/激活背景色都平滑过渡 */
+.rs-menu .el-menu-item,
+.rs-menu .el-sub-menu__title {
+  transition: background-color .2s ease, color .2s ease,
+    margin .2s ease, border-radius .2s ease, box-shadow .2s ease;
+}
+
+/* 页面切换淡入（配合 AppLayout 的 <transition name="rs-fade">） */
+.rs-fade-enter-active { transition: opacity .18s ease, transform .18s ease; }
+.rs-fade-leave-active { transition: opacity .12s ease; }
+.rs-fade-enter-from { opacity: 0; transform: translateY(6px); }
+.rs-fade-leave-to { opacity: 0; }
+
+/* ============================================================
+   布局框架（src/layout/AppLayout.vue + SideNav.vue）
+   左侧栏 220px，折叠后 64px（与 el-menu 的 collapse 宽度一致）；
+   右侧为「顶栏 + 内容区」，内容区独立滚动，页面不需要自己处理高度。
+   ============================================================ */
+.rs-layout { display: flex; height: 100%; overflow: hidden; background: var(--rs-bg); }
+
+.rs-aside {
+  display: flex; flex-direction: column; flex: 0 0 220px; width: 220px;
+  background: var(--rs-sidebar-grad);
+  transition: flex-basis .2s ease, width .2s ease;
+}
+.rs-aside.is-collapsed { flex-basis: 64px; width: 64px; }
+
+.rs-brand {
+  display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 18px;
+  color: #fff; cursor: pointer; overflow: hidden; white-space: nowrap;
+  border-bottom: 1px solid var(--rs-sidebar-border);
+}
+.rs-brand:hover .rs-brand-text { color: var(--rs-accent-2); }
+.rs-logo {
+  display: block; width: 28px; height: 28px; flex: 0 0 28px; border-radius: 6px;
+}
+.rs-brand-text { font-size: 15px; font-weight: 600; letter-spacing: .5px; }
+
+.rs-menu-wrap { flex: 1; min-height: 0; }
+
+/* el-menu 深色主题：菜单背景透明（透出侧栏渐变），折叠/弹出菜单保持一致 */
+.rs-menu {
+  --el-menu-bg-color: transparent;
+  --el-menu-text-color: var(--rs-sidebar-text);
+  --el-menu-hover-bg-color: var(--rs-sidebar-hover);
+  --el-menu-active-color: #fff;
+  border-right: none;
+}
+.rs-menu:not(.el-menu--collapse) { width: 220px; }
+.rs-menu .el-menu-item,
+.rs-menu .el-sub-menu__title { height: 46px; line-height: 46px; }
+/* 圆角留白只在展开态生效：折叠态菜单宽 64px，再加外边距会把 64px 的项挤出侧栏 */
+.rs-menu:not(.el-menu--collapse) .el-menu-item,
+.rs-menu:not(.el-menu--collapse) .el-sub-menu__title { margin: 2px 10px; border-radius: 9px; }
+.rs-menu .el-menu-item { position: relative; }
+.rs-menu .el-menu-item.is-active {
+  background: var(--rs-grad);
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(47, 111, 224, .45);
+}
+/* 渐变激活态下不再需要左侧指示条；指示条只在展开态、且随留白左移对齐 */
+.rs-menu:not(.el-menu--collapse) .el-menu-item.is-active::before {
+  content: ''; position: absolute; left: -10px; top: 8px; bottom: 8px; width: 3px;
+  border-radius: 3px; background: var(--rs-accent-2);
+}
+/* 折叠态：满宽高亮（Element 默认内边距居中图标），保持渐变激活可辨识 */
+.rs-menu.el-menu--collapse .el-menu-item.is-active { background: var(--rs-grad); }
+.rs-menu .el-sub-menu .el-menu-item { background: var(--rs-sidebar-sub); }
+
+.rs-main { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.rs-topbar {
+  display: flex; align-items: center; gap: 12px; flex: 0 0 56px; height: 56px;
+  padding: 0 16px; background: var(--rs-surface); border-bottom: 1px solid var(--rs-border);
+}
+.rs-collapse {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 8px; color: var(--rs-text-2); cursor: pointer;
+  transition: background-color .15s, color .15s;
+}
+.rs-collapse:hover { background: var(--rs-accent-soft); color: var(--rs-accent); }
+.rs-crumb { font-size: 14px; font-weight: 600; color: var(--rs-text); }
+.rs-topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+
+/* 明暗切换按钮（顶栏） */
+.rs-theme-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 8px;
+  color: var(--rs-text-2); cursor: pointer; font-size: 17px;
+  transition: background-color .15s, color .15s, transform .2s;
+}
+.rs-theme-btn:hover { background: var(--rs-accent-soft); color: var(--rs-accent); transform: rotate(15deg); }
+
+.rs-user { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--rs-text); cursor: pointer; outline: none; }
+.rs-user-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rs-user-caret { color: var(--rs-muted); }
+.rs-user-icon { color: var(--rs-muted); }
+.rs-content { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+
+/* 撑满型页面（根节点 .rs-page-fill）：高度取内容区剩余空间，页面自身不滚动 */
+.rs-content > .rs-page-fill { flex: 1 1 auto; min-height: 0; }
+
+/* ============================================================
+   报表配置页（Config.vue）：顶栏固定 + 左侧步骤导航 + 右侧滚动内容
+   ============================================================ */
+.cfg-page {
+  display: flex; flex-direction: column; height: 100%; min-height: 0;
+  overflow: hidden; background: var(--rs-bg);
+}
+.rs-content > .cfg-page { flex: 1 1 auto; }
+
+.cfg-header {
+  display: flex; align-items: center; gap: 10px; flex: 0 0 auto;
+  padding: 10px 18px; background: var(--rs-surface); border-bottom: 1px solid var(--rs-border);
+}
+.cfg-back { flex: none; }
+.cfg-header-title {
+  font-size: 15px; font-weight: 600; color: var(--rs-text);
+  max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cfg-header-id { flex: none; }
+.cfg-header-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+.cfg-body { display: flex; flex: 1 1 auto; min-height: 0; }
+
+/* 左侧步骤导航 */
+.cfg-nav {
+  flex: 0 0 168px; width: 168px; padding: 12px 8px;
+  background: var(--rs-surface); border-right: 1px solid var(--rs-border); overflow: auto;
+}
+.cfg-nav-item {
+  display: flex; align-items: center; gap: 8px; padding: 9px 10px; margin-bottom: 2px;
+  border-radius: 8px; cursor: pointer; color: var(--rs-text-2); font-size: 13px;
+  transition: background-color .15s, color .15s;
+}
+.cfg-nav-item:hover { background: var(--rs-surface-2); color: var(--rs-accent); }
+.cfg-nav-item.is-active { background: var(--rs-accent-soft); color: var(--rs-accent); font-weight: 600; }
+.cfg-nav-idx {
+  display: flex; align-items: center; justify-content: center; flex: none;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--rs-border); color: var(--rs-muted); font-size: 12px;
+}
+.cfg-nav-item.is-active .cfg-nav-idx { background: var(--rs-accent); color: #fff; }
+.cfg-nav-label { flex: 1 1 auto; min-width: 0; }
+.cfg-nav-count {
+  flex: none; min-width: 20px; padding: 0 6px; text-align: center;
+  font-size: 12px; line-height: 18px; color: var(--rs-muted);
+  background: var(--rs-surface-2); border-radius: 9px;
+}
+.cfg-nav-item.is-active .cfg-nav-count { color: var(--rs-accent); background: var(--rs-accent-soft); }
+.cfg-nav-foot { margin-top: 14px; padding: 0 10px; line-height: 1.7; }
+
+/* 右侧内容区：整块滚动，顶栏与左导航不动 */
+.cfg-main { flex: 1 1 auto; min-width: 0; min-height: 0; overflow: auto; padding: 16px 18px 28px; }
+.cfg-pane { width: 100%; }
+
+.cfg-card { margin-bottom: 14px; }
+.cfg-card .el-card__header { padding: 10px 16px; }
+.cfg-card .el-card__body { padding: 14px 16px 2px; }
+.cfg-card-title { font-size: 14px; font-weight: 600; color: var(--rs-text); }
+.cfg-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cfg-form .el-form-item { margin-bottom: 14px; }
+
+/* 两列 / 四列表单排布：窄屏自动退回单列，避免控件被压变形 */
+.cfg-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; }
+.cfg-grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 18px; }
+@media (max-width: 1200px) {
+  .cfg-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+  .cfg-grid, .cfg-grid-4 { grid-template-columns: minmax(0, 1fr); }
+  .cfg-nav { flex-basis: 132px; width: 132px; }
+}
+
+/* 选表：表下拉里的注释/类型辅助信息 */
+.cfg-opt-note { float: right; margin-left: 12px; color: var(--rs-muted); font-size: 12px; }
+
+/* 选表后的字段勾选区 */
+.cfg-picker { width: 100%; border: 1px solid var(--rs-border); border-radius: 8px; overflow: hidden; }
+.cfg-picker-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 6px 10px; background: var(--rs-surface-2); border-bottom: 1px solid var(--rs-border);
+}
+.cfg-picker-list {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 2px 12px; max-height: 190px; overflow: auto; padding: 8px 10px;
+}
+.cfg-picker-list .el-checkbox { margin-right: 0; height: 26px; }
+.cfg-picker-item .el-checkbox__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* SQL 编辑区 */
+.cfg-sql-wrap { width: 100%; }
+.cfg-sql-help { margin-top: 6px; line-height: 1.9; }
+.cfg-sql-help code {
+  padding: 1px 5px; border-radius: 3px; background: var(--rs-surface-2);
+  font-family: Consolas, Monaco, monospace; color: var(--rs-accent);
+}
+.cfg-sql-preview {
+  width: 100%; margin: 0; padding: 10px 12px; max-height: 170px; overflow: auto;
+  background: var(--rs-surface-2); border: 1px solid var(--rs-border); border-radius: 8px;
+  font-size: 12px; line-height: 1.7; color: var(--rs-text); white-space: pre-wrap;
+}
+
+/* ============================================================
+   SQL 编辑器（components/SqlEditor.vue）
+   着色层 <pre> 与输入层 <textarea> 必须像素级对齐：同字体、同内边距、
+   同 line-height，且都不软换行（wrap=off / white-space:pre）。
+   ============================================================ */
+.sql-editor {
+  display: flex; flex-direction: column; width: 100%;
+  border: 1px solid var(--rs-border); border-radius: 8px; background: var(--rs-surface); overflow: hidden;
+}
+.sql-editor:focus-within { border-color: var(--rs-accent); box-shadow: 0 0 0 3px var(--rs-accent-soft); }
+.sql-bar {
+  display: flex; align-items: center; gap: 4px; flex: 0 0 auto;
+  padding: 2px 8px; background: var(--rs-surface-2); border-bottom: 1px solid var(--rs-border);
+}
+.sql-bar-hint { margin-left: auto; color: var(--rs-muted); font-size: 12px; }
+
+.sql-body { position: relative; display: flex; flex: 1 1 auto; min-height: 0; }
+
+.sql-gutter {
+  flex: 0 0 46px; width: 46px; padding: 8px 0; overflow: hidden;
+  text-align: right; color: var(--rs-muted); background: var(--rs-surface-2);
+  border-right: 1px solid var(--rs-border); user-select: none;
+  font: 13px/20px Consolas, Monaco, "Courier New", monospace;
+}
+.sql-gutter > div { height: 20px; padding-right: 8px; }
+
+.sql-pane { position: relative; flex: 1 1 auto; min-width: 0; }
+.sql-hl, .sql-ta {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0; margin: 0; padding: 8px;
+  border: 0; box-sizing: border-box; outline: none; tab-size: 2;
+  font: 13px/20px Consolas, Monaco, "Courier New", monospace;
+}
+.sql-hl { overflow: hidden; white-space: pre; color: var(--rs-text); pointer-events: none; }
+.sql-ta {
+  overflow: auto; resize: none; white-space: pre; background: transparent;
+  color: transparent; caret-color: var(--rs-text);
+}
+.sql-ta::placeholder { color: var(--rs-muted); }
+/* 选区：文字透明，靠背景色让用户看到选中的范围 */
+.sql-ta::selection { background: var(--rs-accent-soft); }
+
+/* 语法着色（亮色） */
+.sql-kw { color: #0b6bcb; font-weight: 600; }
+.sql-fn { color: #7a3e9d; }
+.sql-str { color: #2e7d32; }
+.sql-cmt { color: #9aa0a6; font-style: italic; }
+.sql-num { color: #b26a00; }
+.sql-ident { color: #00796b; }
+.sql-param { color: #c2185b; font-weight: 600; background: #fdecf3; border-radius: 2px; }
+
+/* 语法着色（暗色：整体提亮，保证对比度） */
+html.dark .sql-kw { color: #7db8ff; }
+html.dark .sql-fn { color: #c3a6ff; }
+html.dark .sql-str { color: #7fd8a0; }
+html.dark .sql-cmt { color: #6c7a94; }
+html.dark .sql-num { color: #ffb066; }
+html.dark .sql-ident { color: #5fd4c4; }
+html.dark .sql-param { color: #ff8fb0; background: rgba(255, 143, 176, .12); }
+
+/* 补全浮层 */
+.sql-tip {
+  position: absolute; z-index: 30; width: 280px; max-height: 190px; overflow: auto;
+  margin: 0; padding: 4px 0; list-style: none; background: var(--rs-surface);
+  border: 1px solid var(--rs-border); border-radius: 8px;
+  box-shadow: var(--rs-shadow); font-size: 12px;
+}
+.sql-tip li { display: flex; align-items: center; gap: 8px; padding: 4px 10px; cursor: pointer; }
+.sql-tip li:hover, .sql-tip li.is-active { background: var(--rs-accent-soft); }
+.sql-tip-label {
+  flex: 1 1 auto; min-width: 0; color: var(--rs-text); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+  font-family: Consolas, Monaco, monospace;
+}
+.sql-tip-kind { flex: none; color: var(--rs-muted); }
+.sql-tip-empty { color: var(--rs-muted); cursor: default; }
+
+/* ============================================================
+   展示列主从布局（Config.vue）：左列清单 + 右详情
+   ============================================================ */
+.cols-layout { display: flex; gap: 14px; align-items: flex-start; }
+.cols-list {
+  flex: 1 1 auto; min-width: 0; padding: 10px;
+  background: var(--rs-surface); border: 1px solid var(--rs-border); border-radius: 10px;
+}
+.cols-detail {
+  flex: 0 0 380px; width: 380px; padding: 12px 14px;
+  background: var(--rs-surface); border: 1px solid var(--rs-border); border-radius: 10px;
+  position: sticky; top: 0; max-height: calc(100vh - 210px); overflow: auto;
+}
+.cols-detail-title {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding-bottom: 8px;
+  border-bottom: 1px solid var(--rs-border); font-size: 14px; font-weight: 600; color: var(--rs-text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cols-detail-form .el-form-item { margin-bottom: 12px; }
+@media (max-width: 1200px) {
+  .cols-layout { flex-direction: column; }
+  .cols-detail { flex: 1 1 auto; width: 100%; position: static; max-height: none; }
+}

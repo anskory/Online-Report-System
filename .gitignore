@@ -1,0 +1,37 @@
+# 构建产物
+backend/report-server
+backend/report-server.exe
+backend/*.exe
+
+# 运行期数据 / 日志
+backend/data/
+backend/logs/
+backend/*.log
+
+# 一键编译输出（app\windows | app\linux | app\macos）
+app/
+
+# 依赖与便携工具链（setup-and-build.ps1 自动下载，体积巨大，勿入库）
+node_modules/
+backend/.tools/
+
+# Oracle Instant Client（第三方二进制，授权受限，勿入库）
+backend/*.dll
+backend/*.so
+backend/*.dylib
+
+# 本地配置（含真实 JWT / AES 密钥），仓库只保留 config.yaml.example
+backend/config.yaml
+
+# 前端构建产物（由 npm run build 生成，交付时随二进制打包；仅保留占位文件以便 go:embed 编译）
+backend/internal/webui/dist/*
+!backend/internal/webui/dist/.keep
+
+# 本地数据
+*.db
+*.db-wal
+*.db-shm
+
+# IDE
+.idea/
+.vscode/

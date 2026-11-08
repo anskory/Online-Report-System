@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>在线报表系统 · UI 设计预览</title>
+<style>
+/* ============================================================
+   设计预览原型（非最终代码）：演示三个核心页面的视觉方向
+   ============================================================ */
+:root {
+  --accent: #2f6fe0;
+  --accent-2: #5aa8ff;
+  --accent-soft: rgba(47, 111, 224, .1);
+  --bg: #f3f5f9;
+  --surface: #ffffff;
+  --surface-2: #f8fafd;
+  --text: #1b2537;
+  --text-2: #5b6577;
+  --muted: #98a2b3;
+  --border: #e7eaf1;
+  --shadow: 0 1px 2px rgba(16, 29, 51, .04), 0 10px 30px rgba(16, 29, 51, .07);
+  --radius: 12px;
+  --green: #16a374;
+  --orange: #e6802a;
+  --red: #e05a4e;
+}
+html[data-accent="teal"] { --accent: #0e9488; --accent-2: #2dd4bf; --accent-soft: rgba(14,148,136,.1); }
+html[data-accent="violet"] { --accent: #6553d8; --accent-2: #a78bfa; --accent-soft: rgba(101,83,216,.1); }
+
+html[data-theme="dark"] {
+  --bg: #0c1220;
+  --surface: #141d2f;
+  --surface-2: #1a2540;
+  --text: #e8edf6;
+  --text-2: #a3b1c9;
+  --muted: #6c7a94;
+  --border: #25324b;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+  --accent-soft: rgba(90, 168, 255, .14);
+}
+html[data-accent="teal"][data-theme="dark"] { --accent-soft: rgba(45,212,191,.14); }
+html[data-accent="violet"][data-theme="dark"] { --accent-soft: rgba(167,139,250,.14); }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg); color: var(--text);
+  font-size: 14px; line-height: 1.5;
+  transition: background .25s, color .25s;
+}
+button { font-family: inherit; }
+
+/* ---------- 预览控制条（非产品 UI） ---------- */
+.pv-bar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 999;
+  display: flex; align-items: center; gap: 14px;
+  height: 46px; padding: 0 16px;
+  background: #101a2c; color: #cfd9ea; font-size: 12.5px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.25);
+}
+.pv-bar .pv-title { font-weight: 600; color: #fff; letter-spacing: .5px; }
+.pv-tabs { display: flex; gap: 4px; background: rgba(255,255,255,.08); padding: 3px; border-radius: 8px; }
+.pv-tabs button {
+  border: 0; background: transparent; color: #cfd9ea; font-size: 12.5px;
+  padding: 5px 14px; border-radius: 6px; cursor: pointer; transition: .15s;
+}
+.pv-tabs button.on { background: #2f6fe0; color: #fff; font-weight: 600; }
+.pv-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.pv-dots { display: flex; gap: 7px; }
+.pv-dots span {
+  width: 16px; height: 16px; border-radius: 50%; cursor: pointer;
+  border: 2px solid transparent; transition: .15s;
+}
+.pv-dots span.on { border-color: #fff; transform: scale(1.12); }
+.pv-dots .d-blue { background: #2f6fe0; }
+.pv-dots .d-teal { background: #0e9488; }
+.pv-dots .d-violet { background: #6553d8; }
+.pv-mode {
+  border: 0; background: rgba(255,255,255,.1); color: #fff;
+  padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12.5px;
+}
+.pv-stage { padding: 62px 0 0; height: 100vh; }
+.pv-page { display: none; height: calc(100vh - 46px); }
+.pv-page.on { display: block; }
+.pv-hint { text-align: center; color: var(--muted); font-size: 12px; padding: 10px 0 0; }
+
+/* ---------- 通用组件 ---------- */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-2);
+  padding: 8px 16px; border-radius: 9px; font-size: 13.5px; cursor: pointer;
+  transition: .15s;
+}
+.btn:hover { color: var(--accent); border-color: var(--accent); }
+.btn.primary {
+  background: linear-gradient(135deg, var(--accent-2), var(--accent));
+  border: 0; color: #fff; font-weight: 600;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.btn.primary:hover { filter: brightness(1.06); }
+
+/* ============ 1. 登录页 ============ */
+.login {
+  display: flex; height: 100%;
+  background: var(--bg);
+}
+.login-left {
+  flex: 1.15; position: relative; overflow: hidden;
+  background: linear-gradient(150deg, #16273e 0%, #1d3a63 55%, #2f6fe0 130%);
+  color: #fff; display: flex; flex-direction: column; justify-content: center; padding: 0 8%;
+}
+.login-left::before, .login-left::after {
+  content: ''; position: absolute; border-radius: 50%;
+  background: rgba(255,255,255,.05);
+}
+.login-left::before { width: 480px; height: 480px; right: -140px; top: -160px; }
+.login-left::after { width: 320px; height: 320px; left: -120px; bottom: -120px; }
+.login-glow {
+  position: absolute; width: 560px; height: 560px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(90,168,255,.28), transparent 65%);
+  right: -80px; bottom: -220px; filter: blur(10px);
+}
+.login-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 44px; }
+.login-brand img { width: 42px; height: 42px; border-radius: 10px; box-shadow: 0 6px 18px rgba(0,0,0,.3); }
+.login-brand b { font-size: 19px; letter-spacing: 1px; }
+.login-left h1 { font-size: 34px; margin: 0 0 14px; line-height: 1.35; letter-spacing: 1px; }
+.login-left h1 em { font-style: normal; background: linear-gradient(90deg, #7db8ff, #b7dcff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.login-left p { color: #b9c8de; font-size: 15px; max-width: 420px; margin: 0 0 36px; }
+.login-feats { display: flex; flex-direction: column; gap: 13px; font-size: 13.5px; color: #d5e1f2; }
+.login-feats span { display: flex; align-items: center; gap: 9px; }
+.login-feats i {
+  flex: none; width: 20px; height: 20px; border-radius: 6px; font-style: normal;
+  background: rgba(255,255,255,.14); display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+}
+.login-right {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+}
+.login-card {
+  width: 380px; padding: 42px 40px 34px;
+  background: var(--surface); border-radius: 18px; box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+.login-card h2 { margin: 0 0 4px; font-size: 22px; }
+.login-card .sub { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+.field { margin-bottom: 18px; }
+.field label { display: block; font-size: 13px; color: var(--text-2); margin-bottom: 7px; }
+.field .box {
+  display: flex; align-items: center; gap: 9px;
+  border: 1px solid var(--border); border-radius: 10px; padding: 0 13px; height: 44px;
+  background: var(--surface-2); transition: .15s;
+}
+.field .box:focus-within { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+.field .box svg { flex: none; color: var(--muted); }
+.field input { border: 0; outline: 0; background: transparent; flex: 1; font-size: 14px; color: var(--text); }
+.field input::placeholder { color: var(--muted); }
+.login-ops { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--text-2); margin-bottom: 22px; }
+.login-ops a { color: var(--accent); text-decoration: none; }
+.login-btn {
+  width: 100%; height: 46px; border: 0; border-radius: 11px; cursor: pointer;
+  background: linear-gradient(135deg, var(--accent-2), var(--accent));
+  color: #fff; font-size: 15px; font-weight: 600; letter-spacing: 4px;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 40%, transparent);
+  transition: .15s;
+}
+.login-btn:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.login-foot { text-align: center; color: var(--muted); font-size: 12px; margin-top: 22px; }
+
+/* ============ 2. 应用框架（侧栏 + 顶栏） ============ */
+.shell { display: flex; height: 100%; overflow: hidden; }
+.aside {
+  flex: 0 0 232px; display: flex; flex-direction: column;
+  background: linear-gradient(180deg, #101c30 0%, #15253c 100%);
+  color: #c6d2e4;
+}
+html[data-theme="dark"] .aside { background: linear-gradient(180deg, #0a101d 0%, #0f1a2c 100%); }
+.aside-brand {
+  display: flex; align-items: center; gap: 11px; height: 60px; padding: 0 20px;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+}
+.aside-brand img { width: 30px; height: 30px; border-radius: 8px; }
+.aside-brand b { color: #fff; font-size: 15px; letter-spacing: .5px; }
+.nav { flex: 1; padding: 14px 12px; overflow: auto; }
+.nav-group { font-size: 11px; color: #5f7290; letter-spacing: 2px; padding: 12px 10px 8px; }
+.nav-item {
+  display: flex; align-items: center; gap: 11px;
+  padding: 10px 12px; margin-bottom: 3px; border-radius: 9px;
+  color: #b7c5da; font-size: 13.5px; cursor: pointer; transition: .15s; position: relative;
+}
+.nav-item svg { flex: none; opacity: .8; }
+.nav-item:hover { background: rgba(255,255,255,.07); color: #fff; }
+.nav-item.on { background: linear-gradient(135deg, var(--accent-2), var(--accent)); color: #fff; font-weight: 600; box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 45%, transparent); }
+.nav-item .badge {
+  margin-left: auto; background: rgba(255,255,255,.16); border-radius: 8px;
+  font-size: 11px; padding: 1px 7px;
+}
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.topbar {
+  display: flex; align-items: center; gap: 14px; height: 60px; padding: 0 22px;
+  background: var(--surface); border-bottom: 1px solid var(--border); flex: none;
+}
+.crumb { font-size: 14px; font-weight: 600; }
+.crumb small { color: var(--muted); font-weight: 400; margin-left: 8px; }
+.top-search {
+  margin-left: auto; display: flex; align-items: center; gap: 8px;
+  width: 240px; height: 36px; padding: 0 13px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+  color: var(--muted); font-size: 13px;
+}
+.top-user { display: flex; align-items: center; gap: 10px; }
+.avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-2), var(--accent));
+  color: #fff; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700;
+}
+.content { flex: 1; overflow: auto; padding: 22px; }
+
+/* --- 报表中心 --- */
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 18px; }
+.page-head h3 { margin: 0 0 3px; font-size: 19px; }
+.page-head .desc { color: var(--muted); font-size: 13px; }
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 18px; }
+.kpi {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 17px 18px 14px; box-shadow: var(--shadow); position: relative; overflow: hidden;
+}
+.kpi::after {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: linear-gradient(180deg, var(--accent-2), var(--accent)); border-radius: 3px;
+}
+.kpi .k-label { color: var(--text-2); font-size: 12.5px; margin-bottom: 7px; }
+.kpi .k-value { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.kpi .k-value small { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 3px; }
+.kpi .k-trend { display: inline-flex; align-items: center; gap: 4px; margin-top: 7px; font-size: 12px; }
+.kpi .k-trend.up { color: var(--green); }
+.kpi .k-trend.down { color: var(--red); }
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 15px 18px; border-bottom: 1px solid var(--border);
+}
+.card-head b { font-size: 14.5px; }
+.card-head .ops { display: flex; gap: 8px; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th {
+  text-align: left; padding: 11px 18px; font-weight: 600; color: var(--text-2);
+  background: var(--surface-2); border-bottom: 1px solid var(--border); font-size: 12.5px;
+  white-space: nowrap;
+}
+td { padding: 12px 18px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+tbody tr { transition: background .12s; }
+tbody tr:hover { background: var(--accent-soft); }
+tbody tr:last-child td { border-bottom: 0; }
+.rp-name { display: flex; align-items: center; gap: 11px; font-weight: 600; }
+.rp-ico {
+  flex: none; width: 32px; height: 32px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center; font-size: 14px;
+}
+.rp-ico.b1 { background: rgba(90,168,255,.16); color: #2f6fe0; }
+.rp-ico.b2 { background: rgba(22,163,116,.14); color: #16a374; }
+.rp-ico.b3 { background: rgba(230,128,42,.14); color: #e6802a; }
+html[data-theme="dark"] .rp-ico.b1 { color: #7db8ff; }
+.rp-name small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+.tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 12px; }
+.tag::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.tag.g { background: rgba(22,163,116,.12); color: var(--green); }
+.tag.o { background: rgba(230,128,42,.12); color: var(--orange); }
+.tag.r { background: rgba(224,90,78,.12); color: var(--red); }
+.link { color: var(--accent); text-decoration: none; font-weight: 500; margin-right: 12px; }
+
+/* --- 报表查询页 --- */
+.query-card { padding: 16px 18px 4px; margin-bottom: 16px; }
+.q-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px 18px; }
+.q-item label { display: block; font-size: 12.5px; color: var(--text-2); margin-bottom: 6px; }
+.q-item .box {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 38px; padding: 0 12px; border: 1px solid var(--border);
+  border-radius: 9px; background: var(--surface-2); color: var(--muted); font-size: 13px;
+}
+.q-actions { display: flex; gap: 10px; margin-top: 12px; }
+.tbl-toolbar { display: flex; align-items: center; gap: 10px; padding: 14px 18px; }
+.tbl-toolbar .count { color: var(--muted); font-size: 12.5px; margin-right: auto; }
+.pager { display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding: 13px 18px; font-size: 13px; color: var(--text-2); }
+.pager .pg {
+  min-width: 30px; height: 30px; padding: 0 6px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); background: var(--surface); cursor: pointer;
+}
+.pager .pg.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+
+/* 迷你趋势图 */
+.spark { display: block; margin-top: 4px; }
+
+@media (max-width: 1100px) {
+  .kpis { grid-template-columns: repeat(2, 1fr); }
+  .q-grid { grid-template-columns: repeat(2, 1fr); }
+  .login-left { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- 预览控制条 -->
+<div class="pv-bar">
+  <span class="pv-title">🎨 UI 设计预览</span>
+  <div class="pv-tabs" id="pvTabs">
+    <button data-p="login" class="on">登录页</button>
+    <button data-p="home">报表中心</button>
+    <button data-p="view">报表查询</button>
+  </div>
+  <div class="pv-right">
+    <div class="pv-dots" id="pvDots">
+      <span class="d-blue on" data-a="" title="科技蓝（与 Logo 同源）"></span>
+      <span class="d-teal" data-a="teal" title="青碧"></span>
+      <span class="d-violet" data-a="violet" title="雅紫"></span>
+    </div>
+    <button class="pv-mode" id="pvMode">🌙 暗色</button>
+  </div>
+</div>
+
+<div class="pv-stage">
+
+<!-- ================= 1. 登录页 ================= -->
+<section class="pv-page on" id="pg-login">
+  <div class="login">
+    <div class="login-left">
+      <div class="login-glow"></div>
+      <div class="login-brand">
+        <img src="../frontend/public/logo.svg" alt="" onerror="this.style.display='none'">
+        <b>在线报表系统</b>
+      </div>
+      <h1>让每一张报表<br><em>更快、更准、更省心</em></h1>
+      <p>统一管理数据源与查询报表，拖拽式配置查询条件，一键导出 Excel，生产数据触手可及。</p>
+      <div class="login-feats">
+        <span><i>✓</i> 多数据源接入：Oracle / MySQL / PostgreSQL / SQL Server</span>
+        <span><i>✓</i> 零代码报表配置，SQL 参数自动装配</span>
+        <span><i>✓</i> 字典联动、权限管控、Excel 一键导出</span>
+      </div>
+    </div>
+    <div class="login-right">
+      <div class="login-card">
+        <h2>欢迎回来 👋</h2>
+        <div class="sub">请使用系统账号登录</div>
+        <div class="field">
+          <label>用户名</label>
+          <div class="box">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+            <input placeholder="请输入用户名" value="admin">
+          </div>
+        </div>
+        <div class="field">
+          <label>密码</label>
+          <div class="box">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+            <input type="password" placeholder="请输入密码" value="123456">
+          </div>
+        </div>
+        <div class="login-ops">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" checked style="accent-color:var(--accent)"> 记住我
+          </label>
+          <a href="javascript:;">忘记密码？</a>
+        </div>
+        <button class="login-btn">登 录</button>
+        <div class="login-foot">在线报表系统 v2.0 · Report System</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 2. 报表中心 ================= -->
+<section class="pv-page" id="pg-home">
+  <div class="shell">
+    <aside class="aside">
+      <div class="aside-brand">
+        <img src="../frontend/public/logo.svg" alt="" onerror="this.style.display='none'">
+        <b>在线报表系统</b>
+      </div>
+      <nav class="nav">
+        <div class="nav-item on">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+          报表中心 <span class="badge">47</span>
+        </div>
+        <div class="nav-group">系统管理</div>
+        <div class="nav-item">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+          数据源管理
+        </div>
+        <div class="nav-item">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+          字典管理
+        </div>
+        <div class="nav-item">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><circle cx="4" cy="12" r="2"/><circle cx="12" cy="10" r="2"/><circle cx="20" cy="14" r="2"/></svg>
+          报表配置
+        </div>
+        <div class="nav-item">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.5 3-5.5 6.5-5.5s6.5 2 6.5 5.5"/><path d="M17 8h5M19.5 5.5v5"/></svg>
+          用户管理
+        </div>
+        <div class="nav-item">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg>
+          角色权限
+        </div>
+        <div class="nav-item">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11a9 9 0 0 1 15-6.7L22 7"/><path d="M22 3v4h-4"/><path d="M20 13a9 9 0 0 1-15 6.7L2 17"/><path d="M2 21v-4h4"/></svg>
+          菜单管理
+        </div>
+      </nav>
+    </aside>
+    <div class="main">
+      <header class="topbar">
+        <span class="crumb">报表中心 <small>共 47 张报表 · 6 个数据源</small></span>
+        <div class="top-search">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+          搜索报表名称…
+        </div>
+        <div class="top-user">
+          <div class="avatar">A</div>
+          <span>admin ▾</span>
+        </div>
+      </header>
+      <div class="content">
+        <div class="page-head">
+          <div>
+            <h3>早上好，admin 👋</h3>
+            <div class="desc">今天是 2026年11月8日 星期日，系统运行正常</div>
+          </div>
+          <button class="btn primary">＋ 新建报表</button>
+        </div>
+        <div class="kpis">
+          <div class="kpi">
+            <div class="k-label">今日查询次数</div>
+            <div class="k-value">1,286</div>
+            <span class="k-trend up">▲ 12.4% 较昨日</span>
+            <svg class="spark" width="100%" height="26" viewBox="0 0 200 26" preserveAspectRatio="none"><polyline points="0,20 25,18 50,21 75,14 100,16 125,10 150,12 175,6 200,8" fill="none" stroke="#16a374" stroke-width="2"/></svg>
+          </div>
+          <div class="kpi">
+            <div class="k-label">活跃报表</div>
+            <div class="k-value">47 <small>张</small></div>
+            <span class="k-trend up">▲ 本周新增 3</span>
+            <svg class="spark" width="100%" height="26" viewBox="0 0 200 26" preserveAspectRatio="none"><polyline points="0,18 25,19 50,15 75,16 100,12 125,14 150,9 175,10 200,7" fill="none" stroke="#16a374" stroke-width="2"/></svg>
+          </div>
+          <div class="kpi">
+            <div class="k-label">在线数据源</div>
+            <div class="k-value">5 <small>/ 6</small></div>
+            <span class="k-trend down">▼ 1 个离线</span>
+            <svg class="spark" width="100%" height="26" viewBox="0 0 200 26" preserveAspectRatio="none"><polyline points="0,12 25,12 50,12 75,12 100,18 125,12 150,12 175,12 200,18" fill="none" stroke="#e6802a" stroke-width="2"/></svg>
+          </div>
+          <div class="kpi">
+            <div class="k-label">今日导出任务</div>
+            <div class="k-value">12</div>
+            <span class="k-trend up">▲ 全部成功</span>
+            <svg class="spark" width="100%" height="26" viewBox="0 0 200 26" preserveAspectRatio="none"><polyline points="0,20 25,16 50,17 75,13 100,15 125,11 150,13 175,8 200,10" fill="none" stroke="#16a374" stroke-width="2"/></svg>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <b>常用报表</b>
+            <div class="ops">
+              <button class="btn" style="padding:6px 13px;font-size:12.5px">全部 ↗</button>
+            </div>
+          </div>
+          <table>
+            <thead><tr><th style="width:36%">报表名称</th><th>所属分类</th><th>数据源</th><th>状态</th><th>最近查询</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><div class="rp-name"><span class="rp-ico b1">📊</span><div>钢板生产日报<small>PROD_STEEL_DAILY · 分厂产量汇总</small></div></div></td>
+                <td>生产管理</td><td class="mono">FGPESE0</td>
+                <td><span class="tag g">正常</span></td><td>3 分钟前</td>
+                <td><a class="link" href="javascript:;">查看</a><a class="link" href="javascript:;">导出</a></td>
+              </tr>
+              <tr>
+                <td><div class="rp-name"><span class="rp-ico b2">🎯</span><div>目标计划命中率<small>PLAN_HIT_RATE · 按产品规范维度</small></div></div></td>
+                <td>质量分析</td><td class="mono">FGPESE0</td>
+                <td><span class="tag g">正常</span></td><td>18 分钟前</td>
+                <td><a class="link" href="javascript:;">查看</a><a class="link" href="javascript:;">导出</a></td>
+              </tr>
+              <tr>
+                <td><div class="rp-name"><span class="rp-ico b3">📐</span><div>尺寸分析明细<small>SIZE_ANALYSIS · 钢板规格偏差</small></div></div></td>
+                <td>质量分析</td><td class="mono">PES_ORCL</td>
+                <td><span class="tag g">正常</span></td><td>1 小时前</td>
+                <td><a class="link" href="javascript:;">查看</a><a class="link" href="javascript:;">导出</a></td>
+              </tr>
+              <tr>
+                <td><div class="rp-name"><span class="rp-ico b1">📨</span><div>电文接收日志<small>TMMHP_RECV · 电文收发监控</small></div></div></td>
+                <td>系统监控</td><td class="mono">PES_ORCL</td>
+                <td><span class="tag o">慢查询</span></td><td>2 小时前</td>
+                <td><a class="link" href="javascript:;">查看</a><a class="link" href="javascript:;">导出</a></td>
+              </tr>
+              <tr>
+                <td><div class="rp-name"><span class="rp-ico b2">🏭</span><div>日历作业率日清单<small>CALENDAR_RATE · 作业率统计</small></div></div></td>
+                <td>生产管理</td><td class="mono">MES_DB2</td>
+                <td><span class="tag r">数据源离线</span></td><td>昨天 22:41</td>
+                <td><a class="link" href="javascript:;">查看</a><a class="link" href="javascript:;">导出</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 3. 报表查询页 ================= -->
+<section class="pv-page" id="pg-view">
+  <div class="shell">
+    <aside class="aside">
+      <div class="aside-brand">
+        <img src="../frontend/public/logo.svg" alt="" onerror="this.style.display='none'">
+        <b>在线报表系统</b>
+      </div>
+      <nav class="nav">
+        <div class="nav-item">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+          报表中心
+        </div>
+        <div class="nav-group">系统管理</div>
+        <div class="nav-item">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+          数据源管理
+        </div>
+        <div class="nav-item">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+          字典管理
+        </div>
+        <div class="nav-item on">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><circle cx="4" cy="12" r="2"/><circle cx="12" cy="10" r="2"/><circle cx="20" cy="14" r="2"/></svg>
+          报表配置
+        </div>
+        <div class="nav-item">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.5 3-5.5 6.5-5.5s6.5 2 6.5 5.5"/><path d="M17 8h5M19.5 5.5v5"/></svg>
+          用户管理
+        </div>
+        <div class="nav-item">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg>
+          角色权限
+        </div>
+        <div class="nav-item">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11a9 9 0 0 1 15-6.7L22 7"/><path d="M22 3v4h-4"/><path d="M20 13a9 9 0 0 1-15 6.7L2 17"/><path d="M2 21v-4h4"/></svg>
+          菜单管理
+        </div>
+      </nav>
+    </aside>
+    <div class="main">
+      <header class="topbar">
+        <span class="crumb">报表中心 / 钢板生产日报 <small>PROD_STEEL_DAILY</small></span>
+        <div class="top-user">
+          <button class="btn" style="padding:7px 14px;font-size:12.5px">⟳ 刷新</button>
+          <button class="btn primary" style="padding:7px 16px;font-size:12.5px">⬇ 导出 Excel</button>
+          <div class="avatar">A</div>
+        </div>
+      </header>
+      <div class="content">
+        <div class="card query-card">
+          <div class="q-grid">
+            <div class="q-item">
+              <label>生产日期（起）</label>
+              <div class="box"><span>2026-11-01</span><span>📅</span></div>
+            </div>
+            <div class="q-item">
+              <label>生产日期（止）</label>
+              <div class="box"><span>2026-11-08</span><span>📅</span></div>
+            </div>
+            <div class="q-item">
+              <label>钢板号</label>
+              <div class="box"><span>请输入钢板号</span><span></span></div>
+            </div>
+            <div class="q-item">
+              <label>产品分类</label>
+              <div class="box"><span>全部</span><span>▾</span></div>
+            </div>
+            <div class="q-item">
+              <label>分厂</label>
+              <div class="box"><span>一炼钢 / 全部</span><span>▾</span></div>
+            </div>
+            <div class="q-item">
+              <label>钢种</label>
+              <div class="box"><span>请选择钢种</span><span>▾</span></div>
+            </div>
+            <div class="q-item">
+              <label>规格厚度</label>
+              <div class="box"><span>请输入厚度 mm</span><span></span></div>
+            </div>
+            <div class="q-item">
+              <label>交货状态</label>
+              <div class="box"><span>全部</span><span>▾</span></div>
+            </div>
+          </div>
+          <div class="q-actions">
+            <button class="btn primary">🔍 查询</button>
+            <button class="btn">重置</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="tbl-toolbar">
+            <span class="count">共 3,472 条记录 · 查询耗时 0.42s</span>
+            <button class="btn" style="padding:6px 12px;font-size:12.5px">列配置</button>
+            <button class="btn" style="padding:6px 12px;font-size:12.5px">⟳</button>
+          </div>
+          <table>
+            <thead><tr><th>钢板号 ▾</th><th>生产日期</th><th>分厂</th><th>钢种</th><th>厚度 mm</th><th>宽度 mm</th><th>成材率 %</th><th>交货状态</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">P2611080012</td><td>2026-11-08</td><td>一炼钢</td><td>Q355B</td><td>12.05</td><td>2,480</td><td><span class="tag g">96.8</span></td><td>热轧态</td></tr>
+              <tr><td class="mono">P2611080011</td><td>2026-11-08</td><td>一炼钢</td><td>Q355B</td><td>20.10</td><td>2,200</td><td><span class="tag g">95.2</span></td><td>正火态</td></tr>
+              <tr><td class="mono">P2611080009</td><td>2026-11-08</td><td>二炼钢</td><td>Q690D</td><td>40.00</td><td>2,500</td><td><span class="tag o">92.1</span></td><td>调质态</td></tr>
+              <tr><td class="mono">P2611080007</td><td>2026-11-08</td><td>二炼钢</td><td>Q345R</td><td>16.20</td><td>3,000</td><td><span class="tag g">97.3</span></td><td>热轧态</td></tr>
+              <tr><td class="mono">P2611080005</td><td>2026-11-08</td><td>一炼钢</td><td>NM450</td><td>25.00</td><td>2,150</td><td><span class="tag r">89.6</span></td><td>淬火态</td></tr>
+              <tr><td class="mono">P2611080003</td><td>2026-11-08</td><td>三炼钢</td><td>Q355C</td><td>30.50</td><td>2,400</td><td><span class="tag g">96.1</span></td><td>正火态</td></tr>
+              <tr><td class="mono">P2611080001</td><td>2026-11-08</td><td>三炼钢</td><td>Q235B</td><td>8.00</td><td>1,500</td><td><span class="tag g">98.0</span></td><td>热轧态</td></tr>
+            </tbody>
+          </table>
+          <div class="pager">
+            <span style="margin-right:8px">每页 20 条</span>
+            <span class="pg">‹</span><span class="pg on">1</span><span class="pg">2</span><span class="pg">3</span><span class="pg">…</span><span class="pg">174</span><span class="pg">›</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<script>
+// 页面切换
+document.getElementById('pvTabs').addEventListener('click', function (e) {
+  var btn = e.target.closest('button'); if (!btn) return;
+  this.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b === btn); });
+  document.querySelectorAll('.pv-page').forEach(function (p) {
+    p.classList.toggle('on', p.id === 'pg-' + btn.dataset.p);
+  });
+});
+// 主题色切换
+document.getElementById('pvDots').addEventListener('click', function (e) {
+  var dot = e.target.closest('span'); if (!dot) return;
+  this.querySelectorAll('span').forEach(function (s) { s.classList.toggle('on', s === dot); });
+  document.documentElement.dataset.accent = dot.dataset.a;
+});
+// 明暗切换
+var modeBtn = document.getElementById('pvMode');
+modeBtn.addEventListener('click', function () {
+  var dark = document.documentElement.dataset.theme === 'dark';
+  document.documentElement.dataset.theme = dark ? '' : 'dark';
+  this.textContent = dark ? '🌙 暗色' : '☀️ 亮色';
+});
+</script>
+</body>
+</html>

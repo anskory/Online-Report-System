@@ -1,0 +1,42 @@
+# 复制为 config.yaml 后使用：cp config.yaml.example config.yaml
+# 生产环境务必把 security.jwt_secret 与 security.aes_key 换成随机长密钥，
+# 也可以直接用环境变量 JWT_SECRET / AES_KEY 覆盖（优先级高于本文件）。
+
+# 服务端口（8080 常被其他开发服务占用，默认 18080）
+server:
+  port: 18080
+
+# 系统自身库（默认 SQLite，纯 Go 嵌入，单文件）
+# 服务端会自动追加 WAL + busy_timeout(5000) + foreign_keys 连接参数
+sys_db:
+  driver: sqlite
+  dsn: ./data/report_sys.db
+  # MySQL 模式示例：
+  # driver: mysql
+  # dsn: "user:pass@tcp(127.0.0.1:3306)/report_sys?charset=utf8mb4&parseTime=true"
+
+security:
+  # JWT 签名密钥（生产环境务必更换，或通过环境变量 JWT_SECRET 覆盖）
+  jwt_secret: "change-me-to-a-random-secret-string"
+  # 数据源密码加密密钥（生产环境务必更换，或通过环境变量 AES_KEY 覆盖）
+  aes_key: "change-me-to-a-random-aes-key!!"
+  login_max_fail: 5
+  login_lock_minutes: 10
+
+log:
+  level: info
+  slow_query_ms: 5000
+  audit_retention_days: 90
+
+# 导出子系统
+export:
+  dir: ./data/exports          # 导出文件目录
+  sync_row_limit: 10000        # 行数 ≤ 此值走同步流式导出，超过创建异步任务
+  workers: 2                   # 异步导出 Worker 数
+  retention_days: 7            # 导出文件保留天数（自动清理）
+  xlsx_sheet_max_row: 1000000  # xlsx 单 sheet 行数上限（超出自动拆分 Sheet2...）
+
+# 报表查询
+query:
+  count_timeout_sec: 5   # 统计总数（SELECT COUNT(*)）单独的超时上限，超时则降级为「总数未知」，不再拖住数据返回
+  count_cache_sec: 30    # 统计总数结果缓存秒数，翻页/刷新复用同一次 COUNT；0=不缓存

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <meta name="theme-color" content="#2F6FE0">
+  <title>在线报表系统</title>
+  <!-- 主题防闪烁：CSS 加载前先按用户上次选择设置暗色（与 lib/theme.js 的键一致） -->
+  <script>try{if(localStorage.getItem('rs_theme')==='dark'){document.documentElement.classList.add('dark');document.documentElement.dataset.theme='dark'}}catch(e){}</script>
+  <!--
+    SPA 宿主页：所有业务路由（/login、/reports、/view?id=1…）都由这里进入，
+    由 src/router 决定渲染哪个页面组件；框架（左侧菜单/顶栏）在 layout/AppLayout.vue。
+    服务端只认这一个 HTML，其余路径一律回落到它（见 backend/internal/webui/embed.go 的 Serve）。
+  -->
+</head>
+<body>
+<div id="app"></div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
